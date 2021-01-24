@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Consensus.API", "Consensus.API\Consensus.API.csproj", "{42A7B203-7392-4963-9C98-570369C54F46}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Consensus.Backend", "Consensus.Backend\Consensus.Backend.csproj", "{2EA0F416-FF63-48E2-ADD7-98EDB42FC3D3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArangoDBNetStandard", "arangodb-net-standard\ArangoDBNetStandard.csproj", "{4B0752A0-3352-4CB0-9874-B250243973B5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{42A7B203-7392-4963-9C98-570369C54F46}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{42A7B203-7392-4963-9C98-570369C54F46}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{42A7B203-7392-4963-9C98-570369C54F46}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{42A7B203-7392-4963-9C98-570369C54F46}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2EA0F416-FF63-48E2-ADD7-98EDB42FC3D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2EA0F416-FF63-48E2-ADD7-98EDB42FC3D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2EA0F416-FF63-48E2-ADD7-98EDB42FC3D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2EA0F416-FF63-48E2-ADD7-98EDB42FC3D3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4B0752A0-3352-4CB0-9874-B250243973B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4B0752A0-3352-4CB0-9874-B250243973B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4B0752A0-3352-4CB0-9874-B250243973B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4B0752A0-3352-4CB0-9874-B250243973B5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
