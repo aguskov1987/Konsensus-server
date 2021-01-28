@@ -7,7 +7,7 @@ namespace Consensus.Backend.Yard
     {
         Task<HiveManifest> CreateHive(string title, string description, string userId);
         Task<HiveManifest> GetHiveById(string hiveId);
-        HiveManifest[] FindHivesByTitle(string searchPhrase);
+        Task<HiveManifest[]> FindHivesByTitle(string searchPhrase);
         Task<bool> SetHiveAsUsersDefaultHive(string hiveId, string userId);
         Task<bool> AddHiveToUserSavedHives(string hiveId, string userId);
         Task<bool> RemoveHiveFromUserSavedHives(string hiveId, string userId);

@@ -25,7 +25,7 @@ namespace Consensus.Backend.User
 
         public async Task<string> AuthenticateAsync(string username, string password)
         {
-            string query = $"FOR u IN {Collections.Users.ToString()} FILTER U.username == \"{username}\" AND u.Password == \"{password}\" RETURN u";
+            string query = $"FOR u IN {Collections.Users.ToString()} FILTER u.Username == \"{username}\" AND u.Password == \"{password}\" RETURN u";
             var cursor = await _client.Cursor.PostCursorAsync<Models.User>(query);
             var user = cursor.Result.FirstOrDefault();
             if (user != null)

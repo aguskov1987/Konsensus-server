@@ -81,7 +81,7 @@ namespace Consensus.Backend.Yard
                 {
                     Name = viewName,
                     CollectionName = collectionName,
-                    FieldsToIndex = new[] {"label"}
+                    FieldsToIndex = new[] {"Label"}
                 });
 
                 return hiveManifest.New;
@@ -99,9 +99,21 @@ namespace Consensus.Backend.Yard
             return await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
         }
 
-        public HiveManifest[] FindHivesByTitle(string searchPhrase)
+        public async Task<HiveManifest[]> FindHivesByTitle(string searchPhrase)
         {
-            throw new NotImplementedException();
+            string query = @"
+            FOR doc IN HiveManifests_View
+                SEARCH ANALYZER(doc.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
+                SORT BM25(doc) DESC
+            RETURN doc";
+
+            var parameters = new Dictionary<string, object>
+            {
+                ["phrase"] = searchPhrase
+            };
+
+            var result = await _client.Cursor.PostCursorAsync<HiveManifest>(query, parameters);
+            return result.Result.ToArray();
         }
 
         public async Task<bool> SetHiveAsUsersDefaultHive(string hiveId, string userId)
@@ -134,7 +146,7 @@ namespace Consensus.Backend.Yard
         public async Task<bool> RemoveHiveFromUserSavedHives(string hiveId, string userId)
         {
             string query =
-                $"FOR link IN {Connections.UserHasSavedHive.ToString()} FILTER _from == \"{userId}\" AND _to == \"{hiveId}\"";
+                $"FOR link IN {Connections.UserHasSavedHive.ToString()} FILTER _from == '{userId}' AND _to == '{hiveId}'";
             CursorResponse<UsersSavedHive> result = await _client.Cursor.PostCursorAsync<UsersSavedHive>(query);
             UsersSavedHive item = result.Result.FirstOrDefault();
 
@@ -151,7 +163,7 @@ namespace Consensus.Backend.Yard
 
         public async Task<HiveManifest[]> GetSavedHives(string userId)
         {
-            string query = $"LET hiveIds = (FOR c IN {Connections.UserHasSavedHive.ToString()} FILTER c._from == \"{userId}\" RETURN c._to) ";
+            string query = $"LET hiveIds = (FOR c IN {Connections.UserHasSavedHive.ToString()} FILTER c._from == '{userId}' RETURN c._to) ";
             query += $"FOR hive IN {Collections.HiveManifests.ToString()} FILTER hive._id IN hiveIds RETURN hive";
             CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(query);
             return result.Result.ToArray();

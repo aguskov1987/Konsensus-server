@@ -55,5 +55,13 @@ namespace Consensus.API.Controllers
             HiveManifest[] savedHives = await _yard.GetSavedHives(user._id);
             return Ok(savedHives);
         }
+
+        [HttpPost, Route("search")]
+        [AuthorizeEntry]
+        public async Task<IActionResult> SearchYard([FromBody] SearchYardModel model)
+        {
+            HiveManifest[] hives = await _yard.FindHivesByTitle(model.Phrase);
+            return Ok(hives);
+        }
     }
 }
