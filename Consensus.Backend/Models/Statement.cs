@@ -2,7 +2,7 @@
 {
     public class Statement
     {
-        public string Id { get; set; }
+        public string _id { get; set; }
         public string Label { get; set; }
         public string[] Links { get; set; }
         

@@ -14,4 +14,8 @@
       <ProjectReference Include="..\arangodb-net-standard\ArangoDBNetStandard.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="DTOs" />
+    </ItemGroup>
+
 </Project>

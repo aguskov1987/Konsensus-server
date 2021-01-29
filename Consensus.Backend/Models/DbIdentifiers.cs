@@ -9,6 +9,6 @@
     public enum Connections
     {
         UserHasSavedHive,
-        StatementCausesStatement
+        UserHasParticipated
     }
 }
