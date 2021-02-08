@@ -12,5 +12,6 @@ namespace Consensus.Backend.Yard
         Task<bool> AddHiveToUserSavedHives(string hiveId, string userId);
         Task<bool> RemoveHiveFromUserSavedHives(string hiveId, string userId);
         Task<HiveManifest[]> GetSavedHives(string userId);
+        Task<HiveManifest[]> LoadMostActiveHives();
     }
 }

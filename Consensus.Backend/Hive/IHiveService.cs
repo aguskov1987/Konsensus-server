@@ -5,6 +5,9 @@ namespace Consensus.Backend.Hive
 {
     public interface IHiveService
     {
-        Task<StatementDto> CreateNewStatement(string userId, string statement, string hiveId, string statementCollectionId);
+        Task<StatementDto> CreateNewStatement(string userId, string statement, string[] supportingLinks,
+            string hiveId, string statementCollectionId);
+        Task<StatementDto[]> FindStatements(string phrase, string statementViewId);
+        Task<SubGraph> LoadSubgraph(string statementId, string graphId);
     }
 }

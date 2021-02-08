@@ -55,6 +55,14 @@ namespace Consensus.API.Controllers
             HiveManifest[] savedHives = await _yard.GetSavedHives(user._id);
             return Ok(savedHives);
         }
+        
+        [HttpGet, Route("start")]
+        [AuthorizeEntry]
+        public async Task<IActionResult> LoadMostActiveHives()
+        {
+            HiveManifest[] hives = await _yard.LoadMostActiveHives();
+            return Ok(hives);
+        }
 
         [HttpPost, Route("search")]
         [AuthorizeEntry]

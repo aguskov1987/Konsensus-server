@@ -10,16 +10,18 @@ using ArangoDBNetStandard.GraphApi.Models;
 using ArangoDBNetStandard.ViewApi.Models;
 using Consensus.Backend.Data;
 using Consensus.Backend.Models;
+using Consensus.Backend.User;
 
 namespace Consensus.Backend.Yard
 {
-    // TODO: use bound variables in AQL queries
     public class YardService : IYardService
     {
         private readonly ArangoDBClient _client;
+        private readonly IUserService _user;
 
-        public YardService(IArangoDb db)
+        public YardService(IArangoDb db, IUserService user)
         {
+            _user = user;
             _client = db.GetClient();
         }
 
@@ -35,7 +37,7 @@ namespace Consensus.Backend.Yard
             try
             {
                 // 2. create a graph for the new collection
-                PostGraphResponse graph = await _client.Graph.PostGraphAsync(new PostGraphBody
+                await _client.Graph.PostGraphAsync(new PostGraphBody
                 {
                     Name = graphName,
                     OrphanCollections = new List<string>
@@ -69,15 +71,18 @@ namespace Consensus.Backend.Yard
                         Title = title,
                         Description = description,
                         StatementCollection = collectionName,
-                        SynapseCollection = edgeCollectionName
+                        SynapseCollection = edgeCollectionName,
                     },
                     new PostDocumentsQuery
                     {
                         ReturnNew = true
                     });
+                
+                // 4. register user's participation
+                await _user.AddUserAsParticipant(userId, hiveManifest.New._id);
 
-                // 4. create a search view for the new collection
-                PostViewResponse view = await _client.View.PostView(new PostViewBody
+                // 5. create a search view for the new collection
+                await _client.View.PostView(new PostViewBody
                 {
                     Name = viewName,
                     CollectionName = collectionName,
@@ -133,7 +138,7 @@ namespace Consensus.Backend.Yard
 
         public async Task<bool> AddHiveToUserSavedHives(string hiveId, string userId)
         {
-            PostDocumentResponse<UsersSavedHive> response = await _client.Document.PostDocumentAsync(
+            await _client.Document.PostDocumentAsync(
                 Connections.UserHasSavedHive.ToString(), new UsersSavedHive
                 {
                     _from = userId,
@@ -142,12 +147,17 @@ namespace Consensus.Backend.Yard
 
             return true;
         }
-
+        
         public async Task<bool> RemoveHiveFromUserSavedHives(string hiveId, string userId)
         {
-            string query =
-                $"FOR link IN {Connections.UserHasSavedHive.ToString()} FILTER _from == '{userId}' AND _to == '{hiveId}'";
-            CursorResponse<UsersSavedHive> result = await _client.Cursor.PostCursorAsync<UsersSavedHive>(query);
+            string query = "FOR link IN @@collection FILTER _from == @userId AND _to == @hiveId";
+            var parameters = new Dictionary<string, object>
+            {
+                ["@collection"] = Connections.UserHasSavedHive.ToString(),
+                ["userId"] = userId,
+                ["hiveId"] = hiveId
+            };
+            CursorResponse<UsersSavedHive> result = await _client.Cursor.PostCursorAsync<UsersSavedHive>(query, parameters);
             UsersSavedHive item = result.Result.FirstOrDefault();
 
             if (item != null)
@@ -163,8 +173,46 @@ namespace Consensus.Backend.Yard
 
         public async Task<HiveManifest[]> GetSavedHives(string userId)
         {
-            string query = $"LET hiveIds = (FOR c IN {Connections.UserHasSavedHive.ToString()} FILTER c._from == '{userId}' RETURN c._to) ";
-            query += $"FOR hive IN {Collections.HiveManifests.ToString()} FILTER hive._id IN hiveIds RETURN hive";
+            string query = @"
+            LET hiveIds = (FOR c IN @@userHasSavedHives
+                               FILTER c._from == @userId
+                               RETURN c._to)
+
+            FOR hive IN @@manifests
+                FILTER hive._id IN hiveIds
+                RETURN hive";
+            
+            var parameters = new Dictionary<string, object>
+            {
+                ["@userHasSavedHives"] = Connections.UserHasSavedHive.ToString(),
+                ["@manifests"] = Collections.HiveManifests.ToString(),
+                ["userId"] = userId
+            };
+            
+            CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(query, parameters);
+            return result.Result.ToArray();
+        }
+
+        public async Task<HiveManifest[]> LoadMostActiveHives()
+        {
+            string query = @"
+            LET calculated = (
+                FOR manifest IN HiveManifests
+                FILTER manifest.Participation != null AND length(manifest.Participation) > 1
+                LET sorted = (FOR p IN manifest.Participation SORT p.Date DESC RETURN p)
+                LET today = sorted[0]
+                LET yesterday = sorted[1]
+                LET dynamic = today.NumberOfParticipants/yesterday.NumberOfParticipants
+                RETURN {manifest, dynamic}
+            )
+    
+            FOR c in calculated
+                SORT c.dynamic DESC
+                LIMIT 20
+                RETURN c.manifest";
+            
+            // TODO: cache the result for future use
+            
             CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(query);
             return result.Result.ToArray();
         }

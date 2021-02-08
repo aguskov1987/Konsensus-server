@@ -2,9 +2,9 @@
 {
     public class Effect
     {
-        public string Id { get; set; }
-        public string From { get; set; }
-        public string To { get; set; }
+        public string _id { get; set; }
+        public string _from { get; set; }
+        public string _to { get; set; }
         
         public Response[] Responses { get; set; }
     }

@@ -51,6 +51,7 @@ namespace Consensus.Backend.User
             throw new FileNotFoundException();
         }
 
+        // ! this method might be too long
         public async Task AddUserAsParticipant(string userId, string hiveId, bool newStatement = false)
         {
             string query = @"FOR relation IN @@collection
@@ -62,24 +63,27 @@ namespace Consensus.Backend.User
                 ["userId"] = userId,
                 ["hiveId"] = hiveId
             };
+            bool existingParticipant = false;
             CursorResponse<string> existing = await _client.Cursor.PostCursorAsync<string>(query, parameters);
             if (!string.IsNullOrEmpty(existing.Result.FirstOrDefault()))
             {
-                return;
+                existingParticipant = true;
             }
             
             // if this is the first participation, add a record
-            await _client.Document.PostDocumentAsync(Connections.UserHasParticipated.ToString(),
-                new {_from = userId, _to = hiveId});
-            
+            if (!existingParticipant)
+            {
+                await _client.Document.PostDocumentAsync(Connections.UserHasParticipated.ToString(),
+                    new {_from = userId, _to = hiveId});
+            }
             
             // also add a participation remark to the hive manifest
             string hiveKey = hiveId.Split("/")[1];
+            DateTime today = DateTime.Now.Date;
             HiveManifest hive = await _client.Document
                 .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), hiveKey);
-            if (hive != null)
+            if (hive != null && !existingParticipant)
             {
-                DateTime today = DateTime.Now.Date;
                 ParticipationCount[] counts = hive.Participation.Where(p => p.Date == today).ToArray();
                 if (counts.Length == 1)
                 {
@@ -111,6 +115,24 @@ namespace Consensus.Backend.User
                     }
                 }
 
+                await _client.Document.PutDocumentAsync(hiveId, hive);
+            }
+            else if (hive != null && newStatement)
+            {
+                var statementCounts = hive.NumberOfStatements.Where(p => p.Date == today).ToArray();
+                if (statementCounts.Length == 1)
+                {
+                    statementCounts[0].NumberOfStatements++;
+                }
+                else
+                {
+                    hive.NumberOfStatements.Add(new StatementCount
+                    {
+                        Date = today,
+                        NumberOfStatements = 1
+                    });
+                }
+                
                 await _client.Document.PutDocumentAsync(hiveId, hive);
             }
         }
