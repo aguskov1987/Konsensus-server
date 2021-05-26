@@ -9,17 +9,12 @@
         /// </summary>
         public int MyResponse { get; set; }
         /// <summary>
-        /// From -1 (all disagree) to 1 (all agree). 
+        /// Either a positive or negative fraction. Represents the response
+        /// from all users who responded to the statement
         /// </summary>
         public float CommonResponse { get; set; }
         /// <summary>
-        /// # of responses / # of total participants. A participant is a user who:
-        /// - create the hive
-        /// - left a response
-        /// - created a statement
-        /// - created an effect
-        /// - saved the hive
-        /// - saved a statement from the hive
+        /// Number of responses divided by the number of total participants
         /// </summary>
         public float Penetration { get; set; }
     }

@@ -18,16 +18,14 @@ namespace Consensus.API.Controllers
             _userService = userService;
         }
         
-        [HttpPost, Route("authenticate")]
-        [AllowAnonymous]
+        [HttpPost, Route("authenticate"), AllowAnonymous]
         public async Task<IActionResult> AuthenticateAsync([FromBody] LoginModel loginModel)
         {
             string token = await _userService.AuthenticateAsync(loginModel.Username, loginModel.Password);
             return Ok(token);
         }
 
-        [AuthorizeEntry, Route("user/{id}")]
-        [HttpGet]
+        [HttpGet, Route("user/{id}"), AuthorizeEntry]
         public IActionResult GetUser(string id)
         {
             return Ok((User) HttpContext.Items["User"]);

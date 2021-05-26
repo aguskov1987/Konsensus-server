@@ -32,10 +32,7 @@ namespace Consensus.Backend.Models
             }
         }
         public string _id { get; set; }
-        
-        public string StatementCollection { get; set; }
-        public string SynapseCollection { get; set; }
-        
+        public string CollectionId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public List<ParticipationCount> Participation { get; set; }

@@ -9,30 +9,30 @@ using ArangoDBNetStandard.DocumentApi.Models;
 using ArangoDBNetStandard.GraphApi.Models;
 using ArangoDBNetStandard.ViewApi.Models;
 using Consensus.Backend.Data;
+using Consensus.Backend.Hive;
 using Consensus.Backend.Models;
-using Consensus.Backend.User;
 
 namespace Consensus.Backend.Yard
 {
     public class YardService : IYardService
     {
         private readonly ArangoDBClient _client;
-        private readonly IUserService _user;
+        private readonly IHiveService _hive;
 
-        public YardService(IArangoDb db, IUserService user)
+        public YardService(IArangoDb db, IHiveService hive)
         {
-            _user = user;
             _client = db.GetClient();
+            _hive = hive;
         }
 
         public async Task<HiveManifest> CreateHive(string title, string description, string userId)
         {
             // 1. generate ID
             string identifier = Guid.NewGuid().ToString();
-            string collectionName = "St-" + identifier;
-            string edgeCollectionName = "Sn-" + identifier;
-            string graphName = "G-" + identifier;
-            string viewName = "V-" + identifier;
+            string collectionName = IdPrefix._statementCollection + identifier;
+            string edgeCollectionName = IdPrefix._synapseCollection + identifier;
+            string graphName = IdPrefix._graph + identifier;
+            string viewName = IdPrefix._viewCollection + identifier;
 
             try
             {
@@ -70,8 +70,7 @@ namespace Consensus.Backend.Yard
                     {
                         Title = title,
                         Description = description,
-                        StatementCollection = collectionName,
-                        SynapseCollection = edgeCollectionName,
+                        CollectionId = identifier
                     },
                     new PostDocumentsQuery
                     {
@@ -79,7 +78,7 @@ namespace Consensus.Backend.Yard
                     });
                 
                 // 4. register user's participation
-                await _user.AddUserAsParticipant(userId, hiveManifest.New._id);
+                await _hive.MarkUserAsParticipant(hiveManifest.New._id, userId);
 
                 // 5. create a search view for the new collection
                 await _client.View.PostView(new PostViewBody
@@ -88,6 +87,10 @@ namespace Consensus.Backend.Yard
                     CollectionName = collectionName,
                     FieldsToIndex = new[] {"Label"}
                 });
+                
+                await AddHiveToUserSavedHives(hiveManifest.New._id, userId, SavedHiveOwnershipType.UserCreatedHive);
+                await SetHiveAsUsersDefaultHive(hiveManifest.New._id, userId);
+                await _hive.MarkUserAsParticipant(hiveManifest.New._id, userId);
 
                 return hiveManifest.New;
             }
@@ -136,13 +139,14 @@ namespace Consensus.Backend.Yard
             throw new FileNotFoundException();
         }
 
-        public async Task<bool> AddHiveToUserSavedHives(string hiveId, string userId)
+        public async Task<bool> AddHiveToUserSavedHives(string hiveId, string userId, SavedHiveOwnershipType ownership)
         {
             await _client.Document.PostDocumentAsync(
                 Connections.UserHasSavedHive.ToString(), new UsersSavedHive
                 {
                     _from = userId,
-                    _to = hiveId
+                    _to = hiveId,
+                    OwnershipOwnershipType = ownership
                 });
 
             return true;

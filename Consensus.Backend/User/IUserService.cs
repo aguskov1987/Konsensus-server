@@ -6,6 +6,5 @@ namespace Consensus.Backend.User
     {
         Task<string> AuthenticateAsync(string username, string password);
         Task<Models.User> GetByIdAsync(string userId);
-        Task AddUserAsParticipant(string userId, string hiveId, bool newStatement = false);
     }
 }

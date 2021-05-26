@@ -44,14 +44,15 @@ namespace Consensus.Backend.Hive
                         ReturnNew = true
                     });
 
-            await _user.AddUserAsParticipant(userId, hiveId, true);
+            await MarkUserAsParticipant(hiveId, userId);
+            await BumpHiveStatementCount(hiveId);
 
             // TODO: add cached participation record
 
             return TransformStatement(response.New);
         }
 
-        public async Task<StatementDto[]> FindStatements(string phrase, string statementViewId)
+        public async Task<StatementDto[]> FindStatements(string phrase, string identifier)
         {
             string query = @"
             FOR statement IN @@view
@@ -61,18 +62,12 @@ namespace Consensus.Backend.Hive
 
             var parameters = new Dictionary<string, object>
             {
-                ["@view"] = statementViewId,
+                ["@view"] = IdPrefix._viewCollection + identifier,
                 ["phrase"] = phrase
             };
 
             CursorResponse<Statement> result = await _client.Cursor.PostCursorAsync<Statement>(query, parameters);
             return result.Result.Select(TransformStatement).ToArray();
-        }
-
-        class SubgraphObject
-        {
-            public Statement Statement { get; set; }
-            public Effect Effect { get; set; }
         }
 
         public async Task<SubGraph> LoadSubgraph(string statementId, string graphId)
@@ -89,8 +84,8 @@ namespace Consensus.Backend.Hive
                 ["graphId"] = graphId
             };
 
-            CursorResponse<SubgraphObject> result =
-                await _client.Cursor.PostCursorAsync<SubgraphObject>(query, parameters);
+            CursorResponse<Subgraph> result =
+                await _client.Cursor.PostCursorAsync<Subgraph>(query, parameters);
 
             (Statement[] st, Effect[] ef) = BreakSubgraphIntoStatementsAndEffects(result.Result);
             var subGraph = new SubGraph
@@ -98,8 +93,76 @@ namespace Consensus.Backend.Hive
                 Statements = st.Select(TransformStatement).ToList(),
                 Effects = ef.Select(TransformEffect).ToList()
             };
+            subGraph.Origin = subGraph.Statements.FirstOrDefault(s => s.Id == statementId);
 
             return subGraph;
+        }
+        
+        public async Task MarkUserAsParticipant(string hiveId, string userId)
+        {
+            string query = @"FOR relation IN @@collection
+                                FILTER relation._from == @userId AND relation._to == @hiveId
+                                RETURN relation._to";
+            var parameters = new Dictionary<string, object>
+            {
+                ["@collection"] = Connections.UserHasParticipated.ToString(),
+                ["userId"] = userId,
+                ["hiveId"] = hiveId
+            };
+            CursorResponse<string> existing = await _client.Cursor.PostCursorAsync<string>(query, parameters);
+            var existingParticipant = !string.IsNullOrEmpty(existing.Result.FirstOrDefault());
+
+            // if this is the first participation, add a record
+            if (!existingParticipant)
+            {
+                await _client.Document.PostDocumentAsync(Connections.UserHasParticipated.ToString(),
+                    new {_from = userId, _to = hiveId});
+            }
+
+            // also add a participation remark to the hive manifest
+            string hiveKey = hiveId.Split("/")[1];
+            DateTime today = DateTime.Now.Date;
+            HiveManifest hive = await _client.Document
+                .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), hiveKey);
+
+            ParticipationCount[] counts = hive.Participation.Where(p => p.Date == today).ToArray();
+            if (counts.Length == 1)
+            {
+                counts[0].NumberOfParticipants++;
+            }
+            else
+            {
+                hive.Participation.Add(new ParticipationCount
+                {
+                    Date = today,
+                    NumberOfParticipants = 1
+                });
+            }
+            await _client.Document.PutDocumentAsync(hiveId, hive);
+        }
+
+        public async Task BumpHiveStatementCount(string hiveId)
+        {
+            string hiveKey = hiveId.Split("/")[1];
+            DateTime today = DateTime.Now.Date;
+            HiveManifest hive = await _client.Document
+                .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), hiveKey);
+            
+            var statementCounts = hive.NumberOfStatements.Where(p => p.Date == today).ToArray();
+            if (statementCounts.Length == 1)
+            {
+                statementCounts[0].NumberOfStatements++;
+            }
+            else
+            {
+                hive.NumberOfStatements.Add(new StatementCount
+                {
+                    Date = today,
+                    NumberOfStatements = 1
+                });
+            }
+                
+            await _client.Document.PutDocumentAsync(hiveId, hive);
         }
 
         private StatementDto TransformStatement(Statement s)
@@ -123,9 +186,9 @@ namespace Consensus.Backend.Hive
             return Uri.TryCreate(link, UriKind.RelativeOrAbsolute, out _);
         }
 
-        private (Statement[], Effect[]) BreakSubgraphIntoStatementsAndEffects(IEnumerable<SubgraphObject> subgraph)
+        private (Statement[], Effect[]) BreakSubgraphIntoStatementsAndEffects(IEnumerable<Subgraph> subgraph)
         {
-            IEnumerable<SubgraphObject> subgraphObjects = subgraph as SubgraphObject[] ?? subgraph.ToArray();
+            IEnumerable<Subgraph> subgraphObjects = subgraph as Subgraph[] ?? subgraph.ToArray();
             IEnumerable<Statement> statements = subgraphObjects.Select(obj => obj.Statement);
             IEnumerable<Effect> effects = subgraphObjects.Select(obj => obj.Effect);
 

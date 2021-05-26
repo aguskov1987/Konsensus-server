@@ -18,16 +18,14 @@ namespace Consensus.API.Controllers
             _hive = hive;
         }
 
-        [HttpPost, Route("search")]
-        [AuthorizeEntry]
+        [HttpPost, Route("search"), AuthorizeEntry]
         public async Task<IActionResult> FindStatements([FromBody] StatementSearchModel model)
         {
-            StatementDto[] statements = await _hive.FindStatements(model.Phrase, model.ViewId);
+            StatementDto[] statements = await _hive.FindStatements(model.Phrase, model.Identifier);
             return Ok(statements);
         }
 
-        [HttpPost, Route("statement")]
-        [AuthorizeEntry]
+        [HttpPost, Route("statement"), AuthorizeEntry]
         public async Task<IActionResult> PostNewStatement([FromBody] NewStatementModel model)
         {
             User user = (User)HttpContext.Items["User"];
@@ -36,24 +34,20 @@ namespace Consensus.API.Controllers
             return Ok(new {statements = new [] {statement}});
         }
 
-        [HttpGet, Route("subgraph/{graphId}/{statementId}")]
-        [AuthorizeEntry]
+        [HttpGet, Route("subgraph/{graphId}/{statementId}"), AuthorizeEntry, DecodeQueryParam]
         public async Task<IActionResult> LoadSubgraph(string statementId, string graphId)
         {
-            statementId = statementId.Replace("_", "/");
             SubGraph graph = await _hive.LoadSubgraph(statementId, graphId);
             return Ok(graph);
         }
 
-        [HttpPut, Route("respond")]
-        [AuthorizeEntry]
+        [HttpPut, Route("respond"), AuthorizeEntry]
         public async Task<IActionResult> RespondToStatement([FromBody] UserResponseModel model)
         {
             return Ok();
         }
         
-        [HttpPut, Route("connect")]
-        [AuthorizeEntry]
+        [HttpPut, Route("connect"), AuthorizeEntry]
         public async Task<IActionResult> ConnectCauseToEffect([FromBody] ConnectStatementsModel model)
         {
             return Ok();

@@ -21,5 +21,6 @@ namespace Consensus.Backend.DTOs.Outgoing
 
         public List<StatementDto> Statements { get; set; }
         public List<EffectDto> Effects { get; set; }
+        public StatementDto Origin { get; set; }
     }
 }
