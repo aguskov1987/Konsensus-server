@@ -70,17 +70,16 @@ namespace Consensus.Backend.Yard
                     {
                         Title = title,
                         Description = description,
-                        CollectionId = identifier
+                        CollectionId = identifier,
+                        DateCreated = DateTime.Now
                     },
                     new PostDocumentsQuery
                     {
                         ReturnNew = true
                     });
                 
-                // 4. register user's participation
-                await _hive.MarkUserAsParticipant(hiveManifest.New._id, userId);
 
-                // 5. create a search view for the new collection
+                // 4. create a search view for the new collection
                 await _client.View.PostView(new PostViewBody
                 {
                     Name = viewName,

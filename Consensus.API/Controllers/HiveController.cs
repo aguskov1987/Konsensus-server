@@ -30,14 +30,14 @@ namespace Consensus.API.Controllers
         {
             User user = (User)HttpContext.Items["User"];
             StatementDto statement = await _hive.CreateNewStatement(user._id, model.Statement, model.SupportingLinks,
-                model.HiveId, model.StatementCollectionId);
-            return Ok(new {statements = new [] {statement}});
+                model.HiveId, model.Identifier);
+            return Ok(new {statements = new [] {statement}, effects = new EffectDto[]{}, origin = statement});
         }
 
-        [HttpGet, Route("subgraph/{graphId}/{statementId}"), AuthorizeEntry, DecodeQueryParam]
-        public async Task<IActionResult> LoadSubgraph(string statementId, string graphId)
+        [HttpGet, Route("subgraph"), AuthorizeEntry, DecodeQueryParam]
+        public async Task<IActionResult> LoadSubgraph([FromQuery(Name = "statementId")] string statementId)
         {
-            SubGraph graph = await _hive.LoadSubgraph(statementId, graphId);
+            SubGraph graph = await _hive.LoadSubgraph(statementId);
             return Ok(graph);
         }
 

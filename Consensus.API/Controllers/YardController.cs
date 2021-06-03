@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Consensus.API.Auth;
 using Consensus.API.Models.Incoming;
 using Consensus.Backend.Models;
@@ -21,9 +22,17 @@ namespace Consensus.API.Controllers
         public async Task<IActionResult> CreateNewHiveAsync([FromBody] NewHiveModel model)
         {
             User user = (User) HttpContext.Items["User"];
-            await _yard.CreateHive(model.Title, model.Description, user._id);
 
-            return StatusCode(500);
+            try
+            {
+                HiveManifest manifest = await _yard.CreateHive(model.Title, model.Description, user._id);
+                return Ok(manifest);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return StatusCode(500);
+            }
         }
 
         [HttpGet, Route("hive/{id}"), AuthorizeEntry, DecodeQueryParam]

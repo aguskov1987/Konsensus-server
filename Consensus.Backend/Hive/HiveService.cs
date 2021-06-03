@@ -24,12 +24,14 @@ namespace Consensus.Backend.Hive
         }
 
         public async Task<StatementDto> CreateNewStatement(string userId, string label, string[] supportingLinks,
-            string hiveId, string statementCollectionId)
+            string hiveId, string identifier)
         {
-            if (supportingLinks.Select(IsValidLink).Any(link => !link))
+            if (supportingLinks != null && supportingLinks.Select(IsValidLink).Any(link => !link))
             {
                 throw new UriFormatException();
             }
+
+            string statementCollectionId = IdPrefix._statementCollection + identifier;
 
             PostDocumentResponse<Statement> response = await _client.Document
                 .PostDocumentAsync(
@@ -70,8 +72,11 @@ namespace Consensus.Backend.Hive
             return result.Result.Select(TransformStatement).ToArray();
         }
 
-        public async Task<SubGraph> LoadSubgraph(string statementId, string graphId)
+        public async Task<SubGraph> LoadSubgraph(string statementId)
         {
+            string graphId = statementId.Split("/")[0]
+                .Replace(IdPrefix._statementCollection, IdPrefix._graph);
+            
             string query = @"
             FOR v, e IN 0..5 ANY @statementId
                 GRAPH @graphId

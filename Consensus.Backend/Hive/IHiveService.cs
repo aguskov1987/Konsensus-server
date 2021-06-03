@@ -10,7 +10,7 @@ namespace Consensus.Backend.Hive
         
         Task<StatementDto[]> FindStatements(string phrase, string identifier);
         
-        Task<SubGraph> LoadSubgraph(string statementId, string graphId);
+        Task<SubGraph> LoadSubgraph(string statementId);
         
         /// <summary>
         /// Mark a user as a participant. A participant is somebody who:

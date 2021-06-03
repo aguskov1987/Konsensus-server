@@ -35,6 +35,7 @@ namespace Consensus.Backend.Models
         public string CollectionId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
+        public DateTime DateCreated { get; set; }
         public List<ParticipationCount> Participation { get; set; }
         public List<StatementCount> NumberOfStatements { get; set; }
     }
