@@ -58,7 +58,7 @@ namespace Consensus.Backend.User
             var key = Encoding.ASCII.GetBytes(_secret);
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(new[] { new Claim("id", user._id) }),
+                Subject = new ClaimsIdentity(new[] { new Claim("id", user.Id) }),
                 Expires = DateTime.UtcNow.AddDays(_tokenExpiration),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };

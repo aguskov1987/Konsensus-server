@@ -25,8 +25,8 @@ namespace Consensus.API.Controllers
             return Ok(token);
         }
 
-        [HttpGet, Route("user/{id}"), AuthorizeEntry]
-        public IActionResult GetUser(string id)
+        [HttpGet, Route("user"), AuthorizeEntry]
+        public IActionResult GetUser()
         {
             return Ok((User) HttpContext.Items["User"]);
         }

@@ -23,7 +23,7 @@ namespace Consensus.Backend.Hive
             _client = db.GetClient();
         }
 
-        public async Task<StatementDto> CreateNewStatement(string userId, string label, string[] supportingLinks,
+        public async Task<PointDto> CreateNewPoint(string userId, string point, string[] supportingLinks,
             string hiveId, string identifier)
         {
             if (supportingLinks != null && supportingLinks.Select(IsValidLink).Any(link => !link))
@@ -31,14 +31,14 @@ namespace Consensus.Backend.Hive
                 throw new UriFormatException();
             }
 
-            string statementCollectionId = IdPrefix._statementCollection + identifier;
+            string pointCollectionId = IdPrefix._pointCollection + identifier;
 
-            PostDocumentResponse<Statement> response = await _client.Document
+            PostDocumentResponse<Point> response = await _client.Document
                 .PostDocumentAsync(
-                    statementCollectionId,
-                    new Statement
+                    pointCollectionId,
+                    new Point
                     {
-                        Label = label,
+                        Label = point,
                         Links = supportingLinks
                     },
                     new PostDocumentsQuery
@@ -47,20 +47,20 @@ namespace Consensus.Backend.Hive
                     });
 
             await MarkUserAsParticipant(hiveId, userId);
-            await BumpHiveStatementCount(hiveId);
+            await BumpHivePointCount(hiveId);
 
             // TODO: add cached participation record
 
-            return TransformStatement(response.New);
+            return TransformPoint(response.New);
         }
 
-        public async Task<StatementDto[]> FindStatements(string phrase, string identifier)
+        public async Task<PointDto[]> FindPoints(string phrase, string identifier)
         {
             string query = @"
-            FOR statement IN @@view
-                SEARCH ANALYZER(statement.Label IN TOKENS(@phrase, 'text_en'), 'text_en')
-                SORT BM25(statement) DESC
-            RETURN statement";
+            FOR point IN @@view
+                SEARCH ANALYZER(point.Label IN TOKENS(@phrase, 'text_en'), 'text_en')
+                SORT BM25(point) DESC
+            RETURN point";
 
             var parameters = new Dictionary<string, object>
             {
@@ -68,37 +68,37 @@ namespace Consensus.Backend.Hive
                 ["phrase"] = phrase
             };
 
-            CursorResponse<Statement> result = await _client.Cursor.PostCursorAsync<Statement>(query, parameters);
-            return result.Result.Select(TransformStatement).ToArray();
+            CursorResponse<Point> result = await _client.Cursor.PostCursorAsync<Point>(query, parameters);
+            return result.Result.Select(TransformPoint).ToArray();
         }
 
-        public async Task<SubGraph> LoadSubgraph(string statementId)
+        public async Task<SubGraph> LoadSubgraph(string pointId)
         {
-            string graphId = statementId.Split("/")[0]
-                .Replace(IdPrefix._statementCollection, IdPrefix._graph);
+            string graphId = pointId.Split("/")[0]
+                .Replace(IdPrefix._pointCollection, IdPrefix._graph);
             
             string query = @"
-            FOR v, e IN 0..5 ANY @statementId
+            FOR v, e IN 0..5 ANY @pointId
                 GRAPH @graphId
                 OPTIONS {uniqueVertices: 'path', }
-                RETURN {statement: v, effect: e}";
+                RETURN {point: v, synapse: e}";
 
             var parameters = new Dictionary<string, object>
             {
-                ["statementId"] = statementId,
+                ["pointId"] = pointId,
                 ["graphId"] = graphId
             };
 
             CursorResponse<Subgraph> result =
                 await _client.Cursor.PostCursorAsync<Subgraph>(query, parameters);
 
-            (Statement[] st, Effect[] ef) = BreakSubgraphIntoStatementsAndEffects(result.Result);
+            (Point[] st, Synapse[] ef) = BreakSubgraph(result.Result);
             var subGraph = new SubGraph
             {
-                Statements = st.Select(TransformStatement).ToList(),
-                Effects = ef.Select(TransformEffect).ToList()
+                Points = st.Select(TransformPoint).ToList(),
+                Synapses = ef.Select(TransformSynapse).ToList()
             };
-            subGraph.Origin = subGraph.Statements.FirstOrDefault(s => s.Id == statementId);
+            subGraph.Origin = subGraph.Points.FirstOrDefault(s => s.Id == pointId);
 
             return subGraph;
         }
@@ -146,43 +146,43 @@ namespace Consensus.Backend.Hive
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
 
-        public async Task BumpHiveStatementCount(string hiveId)
+        public async Task BumpHivePointCount(string hiveId)
         {
             string hiveKey = hiveId.Split("/")[1];
             DateTime today = DateTime.Now.Date;
             HiveManifest hive = await _client.Document
                 .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), hiveKey);
             
-            var statementCounts = hive.NumberOfStatements.Where(p => p.Date == today).ToArray();
-            if (statementCounts.Length == 1)
+            var pointCounts = hive.PointCount.Where(p => p.Date == today).ToArray();
+            if (pointCounts.Length == 1)
             {
-                statementCounts[0].NumberOfStatements++;
+                pointCounts[0].Count++;
             }
             else
             {
-                hive.NumberOfStatements.Add(new StatementCount
+                hive.PointCount.Add(new PointCount
                 {
                     Date = today,
-                    NumberOfStatements = 1
+                    Count = 1
                 });
             }
                 
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
 
-        private StatementDto TransformStatement(Statement s)
+        private PointDto TransformPoint(Point s)
         {
-            var statement = new StatementDto {Id = s._id, Label = s.Label};
-            return statement;
+            var point = new PointDto {Id = s.Id, Label = s.Label};
+            return point;
         }
 
-        private EffectDto TransformEffect(Effect e)
+        private SynapseDto TransformSynapse(Synapse e)
         {
-            return new EffectDto
+            return new SynapseDto
             {
-                Id = e._id,
-                Source = e._from,
-                Target = e._to
+                Id = e.Id,
+                From = e.From,
+                To = e.To
             };
         }
 
@@ -191,24 +191,24 @@ namespace Consensus.Backend.Hive
             return Uri.TryCreate(link, UriKind.RelativeOrAbsolute, out _);
         }
 
-        private (Statement[], Effect[]) BreakSubgraphIntoStatementsAndEffects(IEnumerable<Subgraph> subgraph)
+        private (Point[], Synapse[]) BreakSubgraph(IEnumerable<Subgraph> subgraph)
         {
             IEnumerable<Subgraph> subgraphObjects = subgraph as Subgraph[] ?? subgraph.ToArray();
-            IEnumerable<Statement> statements = subgraphObjects.Select(obj => obj.Statement);
-            IEnumerable<Effect> effects = subgraphObjects.Select(obj => obj.Effect);
+            IEnumerable<Point> points = subgraphObjects.Select(obj => obj.Point);
+            IEnumerable<Synapse> synapses = subgraphObjects.Select(obj => obj.Synapse);
 
-            Statement[] uniqueStatements = statements
-                .GroupBy(s => s._id)
+            Point[] uniquePoints = points
+                .GroupBy(s => s.Id)
                 .Select(s => s.First())
                 .ToArray();
 
-            Effect[] uniqueEffects = effects
+            Synapse[] uniqueSynapses = synapses
                 .Where(e => e != null)
-                .GroupBy(e => e._id)
+                .GroupBy(e => e.Id)
                 .Select(e => e.First())
                 .ToArray();
 
-            return (uniqueStatements, uniqueEffects);
+            return (uniquePoints, uniqueSynapses);
         }
     }
 }

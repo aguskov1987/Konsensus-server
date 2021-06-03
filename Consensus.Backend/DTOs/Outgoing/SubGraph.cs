@@ -8,19 +8,19 @@ namespace Consensus.Backend.DTOs.Outgoing
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context)
         {
-            if (Statements == null)
+            if (Points == null)
             {
-                Statements = new List<StatementDto>();
+                Points = new List<PointDto>();
             }
 
-            if (Effects == null)
+            if (Synapses == null)
             {
-                Effects = new List<EffectDto>();
+                Synapses = new List<SynapseDto>();
             }
         }
 
-        public List<StatementDto> Statements { get; set; }
-        public List<EffectDto> Effects { get; set; }
-        public StatementDto Origin { get; set; }
+        public List<PointDto> Points { get; set; }
+        public List<SynapseDto> Synapses { get; set; }
+        public PointDto Origin { get; set; }
     }
 }

@@ -1,10 +1,10 @@
 ﻿namespace Consensus.Backend.DTOs.Outgoing
 {
-    public class EffectDto
+    public class SynapseDto
     {
         public string Id { get; set; }
-        public string Source { get; set; }
-        public string Target { get; set; }
+        public string From { get; set; }
+        public string To { get; set; }
         
         public int MyResponse { get; set; }
         public float CommonResponse { get; set; }

@@ -2,7 +2,7 @@
 
 namespace Consensus.Backend.Models
 {
-    public class UsersSavedHive
+    public class UserSavedPoints
     {
         [JsonProperty("_id")]
         public string Id { get; set; }
@@ -13,6 +13,6 @@ namespace Consensus.Backend.Models
         [JsonProperty("_to")]
         public string To { get; set; }
         
-        public SavedHiveOwnershipType OwnershipOwnershipType { get; set; }
+        public string[] Points { get; set; }
     }
 }

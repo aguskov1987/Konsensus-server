@@ -1,6 +1,6 @@
 ﻿namespace Consensus.Backend.DTOs.Outgoing
 {
-    public class StatementDto
+    public class PointDto
     {
         public string Id { get; set; }
         public string Label { get; set; }
@@ -10,7 +10,7 @@
         public int MyResponse { get; set; }
         /// <summary>
         /// Either a positive or negative fraction. Represents the response
-        /// from all users who responded to the statement
+        /// from all users who responded to the point
         /// </summary>
         public float CommonResponse { get; set; }
         /// <summary>

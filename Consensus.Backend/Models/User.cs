@@ -1,8 +1,11 @@
-﻿namespace Consensus.Backend.Models
+﻿using Newtonsoft.Json;
+
+namespace Consensus.Backend.Models
 {
     public class User
     {
-        public string _id { get; set; }
+        [JsonProperty("_id")]
+        public string Id { get; set; }
         public string Username { get; set; }
         public string Password { get; set; }
         public string CurrentHiveId { get; set; }

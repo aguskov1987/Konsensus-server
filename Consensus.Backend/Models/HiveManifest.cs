@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
+using Newtonsoft.Json;
 
 namespace Consensus.Backend.Models
 {
@@ -10,10 +11,10 @@ namespace Consensus.Backend.Models
         public int NumberOfParticipants { get; set; }
     }
     
-    public class StatementCount
+    public class PointCount
     {
         public DateTime Date { get; set; }
-        public int NumberOfStatements { get; set; }
+        public int Count { get; set; }
     }
     
     public class HiveManifest
@@ -26,17 +27,18 @@ namespace Consensus.Backend.Models
                 Participation = new List<ParticipationCount>();
             }
 
-            if (NumberOfStatements == null)
+            if (PointCount == null)
             {
-                NumberOfStatements = new List<StatementCount>();
+                PointCount = new List<PointCount>();
             }
         }
-        public string _id { get; set; }
+        [JsonProperty("_id")]
+        public string Id { get; set; }
         public string CollectionId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public DateTime DateCreated { get; set; }
         public List<ParticipationCount> Participation { get; set; }
-        public List<StatementCount> NumberOfStatements { get; set; }
+        public List<PointCount> PointCount { get; set; }
     }
 }

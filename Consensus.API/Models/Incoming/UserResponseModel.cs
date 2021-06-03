@@ -2,8 +2,8 @@
 {
     public enum ResponseToType
     {
-        Statement,
-        Effect
+        Point,
+        Synapse
     }
 
     public class UserResponseModel

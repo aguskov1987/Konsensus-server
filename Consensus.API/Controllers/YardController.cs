@@ -25,7 +25,7 @@ namespace Consensus.API.Controllers
 
             try
             {
-                HiveManifest manifest = await _yard.CreateHive(model.Title, model.Description, user._id);
+                HiveManifest manifest = await _yard.CreateHive(model.Title, model.Description, user.Id);
                 return Ok(manifest);
             }
             catch (Exception e)
@@ -35,14 +35,14 @@ namespace Consensus.API.Controllers
             }
         }
 
-        [HttpGet, Route("hive/{id}"), AuthorizeEntry, DecodeQueryParam]
-        public async Task<IActionResult> LoadHiveAsync(string id)
+        [HttpGet, Route("hive"), AuthorizeEntry, DecodeQueryParam]
+        public async Task<IActionResult> LoadHiveAsync([FromQuery] string hiveId)
         {
             User user = (User) HttpContext.Items["User"];
-            HiveManifest hive = await _yard.GetHiveById(id);
+            HiveManifest hive = await _yard.GetHiveById(hiveId);
             if (hive != null)
             {
-                await _yard.SetHiveAsUsersDefaultHive(hive._id, user._id);
+                await _yard.SetHiveAsUsersDefaultHive(hive.Id, user.Id);
                 return Ok(hive);
             }
 
@@ -53,7 +53,7 @@ namespace Consensus.API.Controllers
         public async Task<IActionResult> LoadSavedHivesAsync()
         {
             User user = (User) HttpContext.Items["User"];
-            HiveManifest[] savedHives = await _yard.GetSavedHives(user._id);
+            HiveManifest[] savedHives = await _yard.GetSavedHives(user.Id);
             return Ok(savedHives);
         }
 

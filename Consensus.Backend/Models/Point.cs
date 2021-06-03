@@ -1,8 +1,11 @@
-﻿namespace Consensus.Backend.Models
+﻿using Newtonsoft.Json;
+
+namespace Consensus.Backend.Models
 {
-    public class Statement
+    public class Point
     {
-        public string _id { get; set; }
+        [JsonProperty("_id")]
+        public string Id { get; set; }
         public string Label { get; set; }
         public string[] Links { get; set; }
         

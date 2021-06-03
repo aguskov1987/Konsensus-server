@@ -2,7 +2,7 @@
 {
     public class Subgraph
     {
-        public Statement Statement { get; set; }
-        public Effect Effect { get; set; }
+        public Point Point { get; set; }
+        public Synapse Synapse { get; set; }
     }
 }

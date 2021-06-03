@@ -29,7 +29,7 @@ namespace Consensus.Backend.Yard
         {
             // 1. generate ID
             string identifier = Guid.NewGuid().ToString();
-            string collectionName = IdPrefix._statementCollection + identifier;
+            string collectionName = IdPrefix._pointCollection + identifier;
             string edgeCollectionName = IdPrefix._synapseCollection + identifier;
             string graphName = IdPrefix._graph + identifier;
             string viewName = IdPrefix._viewCollection + identifier;
@@ -87,9 +87,9 @@ namespace Consensus.Backend.Yard
                     FieldsToIndex = new[] {"Label"}
                 });
                 
-                await AddHiveToUserSavedHives(hiveManifest.New._id, userId, SavedHiveOwnershipType.UserCreatedHive);
-                await SetHiveAsUsersDefaultHive(hiveManifest.New._id, userId);
-                await _hive.MarkUserAsParticipant(hiveManifest.New._id, userId);
+                await AddHiveToUserSavedHives(hiveManifest.New.Id, userId, SavedHiveOwnershipType.UserCreatedHive);
+                await SetHiveAsUsersDefaultHive(hiveManifest.New.Id, userId);
+                await _hive.MarkUserAsParticipant(hiveManifest.New.Id, userId);
 
                 return hiveManifest.New;
             }
@@ -143,8 +143,8 @@ namespace Consensus.Backend.Yard
             await _client.Document.PostDocumentAsync(
                 Connections.UserHasSavedHive.ToString(), new UsersSavedHive
                 {
-                    _from = userId,
-                    _to = hiveId,
+                    From = userId,
+                    To = hiveId,
                     OwnershipOwnershipType = ownership
                 });
 
@@ -165,7 +165,7 @@ namespace Consensus.Backend.Yard
 
             if (item != null)
             {
-                string key = item._id.Split("/")[1];
+                string key = item.Id.Split("/")[1];
                 await _client.Document.DeleteDocumentAsync<UsersSavedHive>(Connections.UserHasSavedHive.ToString(),
                     key);
                 return true;
