@@ -11,5 +11,7 @@ namespace Consensus.Backend.DTOs.Outgoing
         public DateTime DateCreated { get; set; }
         public int[] ParticipationCount { get; set; }
         public int[] PointCount { get; set; }
+        
+        public int TotalParticipation { get; set; }
     }
 }

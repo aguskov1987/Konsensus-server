@@ -107,6 +107,7 @@ namespace Consensus.Backend.Yard
         {
             string key = hiveId.Split("/")[1];
             var manifest = await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
+            
             return TransformManifest(manifest);
         }
 
@@ -235,8 +236,9 @@ namespace Consensus.Backend.Yard
                 Title = manifest.Title,
                 CollectionId = manifest.CollectionId,
                 DateCreated = manifest.DateCreated,
-                PointCount = manifest.PointCount.Select(c => c.Count).ToArray(),
-                ParticipationCount = manifest.Participation.Select(c => c.NumberOfParticipants).ToArray()
+                PointCount = manifest.DailyPointCount.Select(c => c.Count).ToArray(),
+                ParticipationCount = manifest.DailyParticipation.Select(c => c.NumberOfParticipants).ToArray(),
+                TotalParticipation = manifest.TotalParticipation
             };
         }
     }

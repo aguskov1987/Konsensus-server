@@ -22,14 +22,14 @@ namespace Consensus.Backend.Models
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context)
         {
-            if (Participation == null)
+            if (DailyParticipation == null)
             {
-                Participation = new List<ParticipationCount>();
+                DailyParticipation = new List<ParticipationCount>();
             }
 
-            if (PointCount == null)
+            if (DailyPointCount == null)
             {
-                PointCount = new List<PointCount>();
+                DailyPointCount = new List<PointCount>();
             }
         }
         [JsonProperty("_id")]
@@ -38,7 +38,9 @@ namespace Consensus.Backend.Models
         public string Title { get; set; }
         public string Description { get; set; }
         public DateTime DateCreated { get; set; }
-        public List<ParticipationCount> Participation { get; set; }
-        public List<PointCount> PointCount { get; set; }
+        public List<ParticipationCount> DailyParticipation { get; set; }
+        public List<PointCount> DailyPointCount { get; set; }
+        
+        public int TotalParticipation { get; set; }
     }
 }

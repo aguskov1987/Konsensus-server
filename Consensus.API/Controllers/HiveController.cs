@@ -21,7 +21,8 @@ namespace Consensus.API.Controllers
         [HttpPost, Route("search"), AuthorizeEntry]
         public async Task<IActionResult> FindPoints([FromBody] PointSearchModel model)
         {
-            PointDto[] points = await _hive.FindPoints(model.Phrase, model.Identifier);
+            User user = (User)HttpContext.Items["User"];
+            PointDto[] points = await _hive.FindPoints(model.Phrase, model.Identifier, user.Id, user.CurrentHiveId);
             return Ok(points);
         }
 
@@ -63,7 +64,8 @@ namespace Consensus.API.Controllers
         [HttpGet, Route("subgraph"), AuthorizeEntry, DecodeQueryParam]
         public async Task<IActionResult> LoadSubgraph([FromQuery(Name = "pointId")] string pointId)
         {
-            SubGraph graph = await _hive.LoadSubgraph(pointId);
+            User user = (User)HttpContext.Items["User"];
+            SubGraph graph = await _hive.LoadSubgraph(pointId, user.Id, user.CurrentHiveId);
             return Ok(graph);
         }
     }

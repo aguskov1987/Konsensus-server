@@ -8,9 +8,9 @@ namespace Consensus.Backend.Hive
         Task<PointDto> CreateNewPoint(string userId, string point, string[] supportingLinks,
             string hiveId, string identifier);
         
-        Task<PointDto[]> FindPoints(string phrase, string identifier);
+        Task<PointDto[]> FindPoints(string phrase, string identifier, string userId, string hiveId);
         
-        Task<SubGraph> LoadSubgraph(string pointId);
+        Task<SubGraph> LoadSubgraph(string pointId, string userId, string hiveId);
         
         /// <summary>
         /// Mark a user as a participant. A participant is somebody who:
