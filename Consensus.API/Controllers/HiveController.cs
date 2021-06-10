@@ -33,24 +33,38 @@ namespace Consensus.API.Controllers
                 model.HiveId, model.Identifier);
             return Ok(new {points = new [] {point}, synapses = new SynapseDto[]{}, origin = point});
         }
+        
+        [HttpPost, Route("synapse"), AuthorizeEntry]
+        public async Task<IActionResult> ConnectWithSynapse([FromBody] NewSynapseModel model)
+        {
+            User user = (User)HttpContext.Items["User"];
+            SynapseDto synapse = await _hive.CreateNewSynapse(model.FromId, model.ToId, model.HiveId, user.Id);
+            
+            return Ok(new
+            {
+                points = new PointDto []{},
+                synapses = synapse == null ? new SynapseDto []{} : new[]{synapse}
+            });
+        }
+        
+        [HttpPost, Route("respond"), AuthorizeEntry]
+        public async Task<IActionResult> Respond([FromBody] UserResponseModel model)
+        {
+            User user = (User)HttpContext.Items["User"];
+            object item = await _hive.Respond(model.ItemId, model.HiveId, model.Agree, user.Id);
+
+            if (item is PointDto dto)
+            {
+                return Ok(new {points = new[] {dto}, synapses = new SynapseDto[]{}});
+            }
+            return Ok(new {points = new PointDto []{}, synapses = new[]{item as SynapseDto}});
+        }
 
         [HttpGet, Route("subgraph"), AuthorizeEntry, DecodeQueryParam]
         public async Task<IActionResult> LoadSubgraph([FromQuery(Name = "pointId")] string pointId)
         {
             SubGraph graph = await _hive.LoadSubgraph(pointId);
             return Ok(graph);
-        }
-
-        [HttpPut, Route("respond"), AuthorizeEntry]
-        public async Task<IActionResult> RespondToPoint([FromBody] UserResponseModel model)
-        {
-            return Ok();
-        }
-        
-        [HttpPut, Route("connect"), AuthorizeEntry]
-        public async Task<IActionResult> ConnectCauseToSynapse([FromBody] ConnectPointsModel model)
-        {
-            return Ok();
         }
     }
 }

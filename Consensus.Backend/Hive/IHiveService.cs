@@ -38,5 +38,9 @@ namespace Consensus.Backend.Hive
         /// </summary>
         /// <param name="hiveId">Hive ID</param>
         Task BumpHivePointCount(string hiveId);
+
+        Task<SynapseDto> CreateNewSynapse(string fromId, string toId, string hiveId, string userId);
+        
+        Task<object> Respond(string itemId, string hiveId, bool agree, string userId);
     }
 }

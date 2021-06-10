@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using System;
+using Newtonsoft.Json;
 
 namespace Consensus.Backend.Models
 {
@@ -10,6 +11,8 @@ namespace Consensus.Backend.Models
         public string From { get; set; }
         [JsonProperty("_to")]
         public string To { get; set; }
+        
+        public DateTime DateCreated { get; set; }
         
         public Response[] Responses { get; set; }
     }

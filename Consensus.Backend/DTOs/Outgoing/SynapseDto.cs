@@ -6,7 +6,7 @@
         public string From { get; set; }
         public string To { get; set; }
         
-        public int MyResponse { get; set; }
+        public int UserResponse { get; set; }
         public float CommonResponse { get; set; }
         public float Penetration { get; set; }
     }

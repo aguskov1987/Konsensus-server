@@ -9,6 +9,7 @@ using ArangoDBNetStandard.DocumentApi.Models;
 using ArangoDBNetStandard.GraphApi.Models;
 using ArangoDBNetStandard.ViewApi.Models;
 using Consensus.Backend.Data;
+using Consensus.Backend.DTOs.Outgoing;
 using Consensus.Backend.Hive;
 using Consensus.Backend.Models;
 
@@ -24,6 +25,8 @@ namespace Consensus.Backend.Yard
             _client = db.GetClient();
             _hive = hive;
         }
+
+        #region IYardService Members
 
         public async Task<HiveManifest> CreateHive(string title, string description, string userId)
         {
@@ -100,10 +103,11 @@ namespace Consensus.Backend.Yard
             }
         }
 
-        public async Task<HiveManifest> GetHiveById(string hiveId)
+        public async Task<HiveManifestDto> GetHiveById(string hiveId)
         {
             string key = hiveId.Split("/")[1];
-            return await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
+            var manifest = await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
+            return TransformManifest(manifest);
         }
 
         public async Task<HiveManifest[]> FindHivesByTitle(string searchPhrase)
@@ -150,7 +154,7 @@ namespace Consensus.Backend.Yard
 
             return true;
         }
-        
+
         public async Task<bool> RemoveHiveFromUserSavedHives(string hiveId, string userId)
         {
             string query = "FOR link IN @@collection FILTER _from == @userId AND _to == @hiveId";
@@ -218,6 +222,22 @@ namespace Consensus.Backend.Yard
             
             CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(query);
             return result.Result.ToArray();
+        }
+
+        #endregion
+
+        private HiveManifestDto TransformManifest(HiveManifest manifest)
+        {
+            return new HiveManifestDto
+            {
+                Id = manifest.Id,
+                Description = manifest.Description,
+                Title = manifest.Title,
+                CollectionId = manifest.CollectionId,
+                DateCreated = manifest.DateCreated,
+                PointCount = manifest.PointCount.Select(c => c.Count).ToArray(),
+                ParticipationCount = manifest.Participation.Select(c => c.NumberOfParticipants).ToArray()
+            };
         }
     }
 }

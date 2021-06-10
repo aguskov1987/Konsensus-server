@@ -7,7 +7,7 @@
         /// <summary>
         /// The requesting user's response - either 1 or -1 (agree or disagree)
         /// </summary>
-        public int MyResponse { get; set; }
+        public int UserResponse { get; set; }
         /// <summary>
         /// Either a positive or negative fraction. Represents the response
         /// from all users who responded to the point

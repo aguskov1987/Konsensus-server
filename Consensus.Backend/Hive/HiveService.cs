@@ -8,18 +8,15 @@ using ArangoDBNetStandard.DocumentApi.Models;
 using Consensus.Backend.Data;
 using Consensus.Backend.DTOs.Outgoing;
 using Consensus.Backend.Models;
-using Consensus.Backend.User;
 
 namespace Consensus.Backend.Hive
 {
     public class HiveService : IHiveService
     {
         private readonly ArangoDBClient _client;
-        private readonly IUserService _user;
 
-        public HiveService(IArangoDb db, IUserService user)
+        public HiveService(IArangoDb db)
         {
-            _user = user;
             _client = db.GetClient();
         }
 
@@ -39,7 +36,8 @@ namespace Consensus.Backend.Hive
                     new Point
                     {
                         Label = point,
-                        Links = supportingLinks
+                        Links = supportingLinks,
+                        DateCreated = DateTime.Now
                     },
                     new PostDocumentsQuery
                     {
@@ -52,6 +50,73 @@ namespace Consensus.Backend.Hive
             // TODO: add cached participation record
 
             return TransformPoint(response.New);
+        }
+        
+        public async Task<SynapseDto> CreateNewSynapse(string fromId, string toId, string hiveId, string userId)
+        {
+            string identifier = fromId.Split('/')[0].Substring(3);
+            string collection = IdPrefix._synapseCollection + identifier;
+            
+            // Check for existing
+            string query = "FOR i IN @@col FILTER i._from == @from && i._to == @to RETURN i";
+            var parameters = new Dictionary<string, object>
+            {
+                ["@col"] = collection,
+                ["from"] = fromId,
+                ["to"] = toId
+            };
+            CursorResponse<Synapse> result =
+                await _client.Cursor.PostCursorAsync<Synapse>(query, parameters, null, true);
+            if (result.Count > 0)
+            {
+                return null;
+            }
+
+            PostDocumentResponse<Synapse> response = await _client.Document
+                .PostDocumentAsync(
+                    collection,
+                    new Synapse
+                    {
+                        From = fromId,
+                        To = toId,
+                        DateCreated = DateTime.Now
+                    },
+                    new PostDocumentsQuery
+                    {
+                        ReturnNew = true
+                    });
+
+            await MarkUserAsParticipant(hiveId, userId);
+            return TransformSynapse(response.New);
+        }
+
+        public async Task<object> Respond(string itemId, string hiveId, bool agree, string userId)
+        {
+            var collectionId = itemId.Split('/')[0];
+            var key = itemId.Split('/')[1];
+            bool isPoint = collectionId[1] == 't';
+
+            object item;
+            
+            if (isPoint)
+            {
+                Point result = await _client.Document
+                    .GetDocumentAsync<Point>(collectionId, key);
+                result.Responses = UpdateResponse(result.Responses, agree, userId);
+                var newItem = await _client.Document.PutDocumentAsync(result.Id, result, new PutDocumentQuery {ReturnNew = true});
+                item = TransformPoint(newItem.New);
+            }
+            else
+            {
+                Synapse result = await _client.Document
+                    .GetDocumentAsync<Synapse>(collectionId, key);
+                result.Responses = UpdateResponse(result.Responses, agree, userId);
+                var newItem = await _client.Document.PutDocumentAsync(result.Id, result, new PutDocumentQuery {ReturnNew = true});
+                item = TransformSynapse(newItem.New);
+            }
+            
+            await MarkUserAsParticipant(hiveId, userId);
+            return item;
         }
 
         public async Task<PointDto[]> FindPoints(string phrase, string identifier)
@@ -169,7 +234,7 @@ namespace Consensus.Backend.Hive
                 
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
-
+        
         private PointDto TransformPoint(Point s)
         {
             var point = new PointDto {Id = s.Id, Label = s.Label};
@@ -209,6 +274,29 @@ namespace Consensus.Backend.Hive
                 .ToArray();
 
             return (uniquePoints, uniqueSynapses);
+        }
+
+        private Response[] UpdateResponse(Response[] original, bool agree, string userId)
+        {
+            if (original == null || !original.Any())
+            {
+                return new[] {new Response {Agrees = agree, Time = DateTime.Now, UserId = userId}};
+            }
+
+            var existing = original.FirstOrDefault(r => r.UserId == userId);
+            if (existing != null)
+            {
+                existing.Agrees = agree;
+                existing.Time = DateTime.Now;
+                return original;
+            }
+
+            var newItem = new Response {Agrees = agree, Time = DateTime.Now, UserId = userId};
+            var updated = new Response[original.Length + 1];
+            original.CopyTo(updated, 0);
+            updated[updated.Length - 1] = newItem;
+
+            return updated;
         }
     }
 }

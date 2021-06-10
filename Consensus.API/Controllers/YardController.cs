@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Consensus.API.Auth;
 using Consensus.API.Models.Incoming;
+using Consensus.Backend.DTOs.Outgoing;
 using Consensus.Backend.Models;
 using Consensus.Backend.Yard;
 using Microsoft.AspNetCore.Mvc;
@@ -39,7 +40,7 @@ namespace Consensus.API.Controllers
         public async Task<IActionResult> LoadHiveAsync([FromQuery] string hiveId)
         {
             User user = (User) HttpContext.Items["User"];
-            HiveManifest hive = await _yard.GetHiveById(hiveId);
+            HiveManifestDto hive = await _yard.GetHiveById(hiveId);
             if (hive != null)
             {
                 await _yard.SetHiveAsUsersDefaultHive(hive.Id, user.Id);
