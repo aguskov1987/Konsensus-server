@@ -40,7 +40,6 @@ namespace Consensus.Backend.Models
         public DateTime DateCreated { get; set; }
         public List<ParticipationCount> DailyParticipation { get; set; }
         public List<PointCount> DailyPointCount { get; set; }
-        
         public int TotalParticipation { get; set; }
     }
 }

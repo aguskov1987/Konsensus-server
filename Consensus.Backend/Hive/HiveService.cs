@@ -8,7 +8,6 @@ using ArangoDBNetStandard.DocumentApi.Models;
 using Consensus.Backend.Data;
 using Consensus.Backend.DTOs.Outgoing;
 using Consensus.Backend.Models;
-using Consensus.Backend.Yard;
 
 namespace Consensus.Backend.Hive
 {
@@ -304,7 +303,7 @@ namespace Consensus.Backend.Hive
             var userResponseRecord = responses.FirstOrDefault(r => r.UserId == userId);
             if (userResponseRecord != null)
             {
-                userResponse = userResponseRecord.Agrees ? 1 : 0;
+                userResponse = userResponseRecord.Agrees ? 1 : -1;
             }
 
             int positiveResponses = responses.Count(r => r.Agrees);
