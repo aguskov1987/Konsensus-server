@@ -1,12 +1,13 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Consensus.Backend.DTOs.Outgoing;
 
 namespace Consensus.Backend.Hive
 {
     public interface IHiveService
     {
-        Task<PointDto> CreateNewPoint(string userId, string point, string[] supportingLinks,
-            string hiveId, string identifier);
+        Task<(PointDto, SynapseDto)> CreateNewPoint(string userId, string point, string[] supportingLinks,
+            string hiveId, string identifier, string fromId, string toId);
         
         Task<PointDto[]> FindPoints(string phrase, string identifier, string userId, string hiveId);
         

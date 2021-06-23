@@ -238,7 +238,8 @@ namespace Consensus.Backend.Yard
                 DateCreated = manifest.DateCreated,
                 PointCount = manifest.DailyPointCount.Select(c => c.Count).ToArray(),
                 ParticipationCount = manifest.DailyParticipation.Select(c => c.NumberOfParticipants).ToArray(),
-                TotalParticipation = manifest.TotalParticipation
+                TotalParticipation = manifest.TotalParticipation,
+                AllowDanglingPoints = manifest.AllowDanglingPoints
             };
         }
     }

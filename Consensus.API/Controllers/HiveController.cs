@@ -30,9 +30,15 @@ namespace Consensus.API.Controllers
         public async Task<IActionResult> PostNewPoint([FromBody] NewPointModel model)
         {
             User user = (User)HttpContext.Items["User"];
-            PointDto point = await _hive.CreateNewPoint(user.Id, model.Point, model.SupportingLinks,
-                model.HiveId, model.Identifier);
-            return Ok(new {points = new [] {point}, synapses = new SynapseDto[]{}, origin = point});
+            
+            (PointDto, SynapseDto) result = await _hive.CreateNewPoint(user.Id, model.Point, model.SupportingLinks,
+                model.HiveId, model.Identifier, model.FromId, model.ToId);
+
+            if (result.Item2 == null)
+            {
+                return Ok(new {points = new [] {result.Item1}, synapses = new SynapseDto[]{}, origin = result.Item1});
+            }
+            return Ok(new {points = new [] {result.Item1}, synapses = new []{result.Item2}, origin = result.Item1});
         }
         
         [HttpPost, Route("synapse"), AuthorizeEntry]

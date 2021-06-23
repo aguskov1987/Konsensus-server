@@ -20,9 +20,23 @@ namespace Consensus.Backend.Hive
             _client = db.GetClient();
         }
 
-        public async Task<PointDto> CreateNewPoint(string userId, string point, string[] supportingLinks,
-            string hiveId, string identifier)
+        public async Task<(PointDto, SynapseDto)> CreateNewPoint(string userId, string point, string[] supportingLinks,
+            string hiveId, string identifier, string fromId, string toId)
         {
+            string key = hiveId.Split("/")[1];
+            HiveManifest manifest =
+                await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
+
+            if (!manifest.AllowDanglingPoints && string.IsNullOrEmpty(fromId) && string.IsNullOrEmpty(toId))
+            {
+                throw new InvalidOperationException();
+            }
+
+            if (!string.IsNullOrEmpty(fromId) && !string.IsNullOrEmpty(toId))
+            {
+                throw new InvalidOperationException();
+            }
+
             if (supportingLinks != null && supportingLinks.Select(IsValidLink).Any(link => !link))
             {
                 throw new UriFormatException();
@@ -30,36 +44,48 @@ namespace Consensus.Backend.Hive
 
             string pointCollectionId = IdPrefix._pointCollection + identifier;
 
-            PostDocumentResponse<Point> response = await _client.Document
+            PostDocumentResponse<Point> pointResponse = await _client.Document
                 .PostDocumentAsync(
                     pointCollectionId,
                     new Point
                     {
                         Label = point,
                         Links = supportingLinks,
-                        DateCreated = DateTime.Now
+                        DateCreated = DateTime.Now,
+                        Responses = new Response[] { }
                     },
-                    new PostDocumentsQuery
-                    {
-                        ReturnNew = true
-                    });
+                    new PostDocumentsQuery {ReturnNew = true});
 
             await MarkUserAsParticipant(hiveId, userId);
             await BumpHivePointCount(hiveId);
 
-            // TODO: add cached participation record
+            if (string.IsNullOrEmpty(fromId) && string.IsNullOrEmpty(toId))
+            {
+                return (TransformPoint(pointResponse.New, userId, manifest.TotalParticipation), null);
+            }
 
-            string key = hiveId.Split("/")[1];
-            var manifest = await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
+            string synCollectionId = IdPrefix._synapseCollection + identifier;
+            PostDocumentResponse<Synapse> synResponse = await _client.Document
+                .PostDocumentAsync(
+                    synCollectionId,
+                    new Synapse
+                    {
+                        DateCreated = DateTime.Now,
+                        From = !string.IsNullOrEmpty(fromId) ? fromId : pointResponse._id,
+                        To = !string.IsNullOrEmpty(toId) ? toId : pointResponse._id,
+                        Responses = new Response[] { }
+                    },
+                    new PostDocumentsQuery {ReturnNew = true});
 
-            return TransformPoint(response.New, userId, manifest.TotalParticipation);
+            return (TransformPoint(pointResponse.New, userId, manifest.TotalParticipation),
+                TransformSynapse(synResponse.New, userId, manifest.TotalParticipation));
         }
-        
+
         public async Task<SynapseDto> CreateNewSynapse(string fromId, string toId, string hiveId, string userId)
         {
             string identifier = fromId.Split('/')[0].Substring(3);
             string collection = IdPrefix._synapseCollection + identifier;
-            
+
             // Check for existing
             string query = "FOR i IN @@col FILTER i._from == @from && i._to == @to RETURN i";
             var parameters = new Dictionary<string, object>
@@ -90,9 +116,10 @@ namespace Consensus.Backend.Hive
                     });
 
             await MarkUserAsParticipant(hiveId, userId);
-            
+
             string key = hiveId.Split("/")[1];
-            var manifest = await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
+            var manifest =
+                await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
 
             return TransformSynapse(response.New, userId, manifest.TotalParticipation);
         }
@@ -104,17 +131,18 @@ namespace Consensus.Backend.Hive
             bool isPoint = collectionId[1] == 't';
 
             object item;
-            
+
             string manifestKey = hiveId.Split("/")[1];
             var manifest = await _client.Document
-                    .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), manifestKey);
-            
+                .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), manifestKey);
+
             if (isPoint)
             {
                 Point result = await _client.Document
                     .GetDocumentAsync<Point>(collectionId, key);
                 result.Responses = UpdateResponse(result.Responses, agree, userId);
-                var newItem = await _client.Document.PutDocumentAsync(result.Id, result, new PutDocumentQuery {ReturnNew = true});
+                var newItem =
+                    await _client.Document.PutDocumentAsync(result.Id, result, new PutDocumentQuery {ReturnNew = true});
                 item = TransformPoint(newItem.New, userId, manifest.TotalParticipation);
             }
             else
@@ -122,10 +150,11 @@ namespace Consensus.Backend.Hive
                 Synapse result = await _client.Document
                     .GetDocumentAsync<Synapse>(collectionId, key);
                 result.Responses = UpdateResponse(result.Responses, agree, userId);
-                var newItem = await _client.Document.PutDocumentAsync(result.Id, result, new PutDocumentQuery {ReturnNew = true});
+                var newItem =
+                    await _client.Document.PutDocumentAsync(result.Id, result, new PutDocumentQuery {ReturnNew = true});
                 item = TransformSynapse(newItem.New, userId, manifest.TotalParticipation);
             }
-            
+
             await MarkUserAsParticipant(hiveId, userId);
             return item;
         }
@@ -145,7 +174,7 @@ namespace Consensus.Backend.Hive
             };
 
             CursorResponse<Point> result = await _client.Cursor.PostCursorAsync<Point>(query, parameters);
-            
+
             string manifestKey = hiveId.Split("/")[1];
             var manifest = await _client.Document
                 .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), manifestKey);
@@ -156,7 +185,7 @@ namespace Consensus.Backend.Hive
         {
             string graphId = pointId.Split("/")[0]
                 .Replace(IdPrefix._pointCollection, IdPrefix._graph);
-            
+
             string query = @"
             FOR v, e IN 0..5 ANY @pointId
                 GRAPH @graphId
@@ -173,7 +202,7 @@ namespace Consensus.Backend.Hive
                 await _client.Cursor.PostCursorAsync<Subgraph>(query, parameters);
 
             (Point[] st, Synapse[] ef) = BreakSubgraph(result.Result);
-            
+
             string manifestKey = hiveId.Split("/")[1];
             var manifest = await _client.Document
                 .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), manifestKey);
@@ -186,7 +215,7 @@ namespace Consensus.Backend.Hive
 
             return subGraph;
         }
-        
+
         public async Task MarkUserAsParticipant(string hiveId, string userId)
         {
             string query = @"FOR relation IN @@collection
@@ -229,7 +258,7 @@ namespace Consensus.Backend.Hive
             }
 
             hive.TotalParticipation++;
-            
+
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
 
@@ -239,7 +268,7 @@ namespace Consensus.Backend.Hive
             DateTime today = DateTime.Now.Date;
             HiveManifest hive = await _client.Document
                 .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), hiveKey);
-            
+
             var pointCounts = hive.DailyPointCount.Where(p => p.Date == today).ToArray();
             if (pointCounts.Length == 1)
             {
@@ -253,10 +282,10 @@ namespace Consensus.Backend.Hive
                     Count = 1
                 });
             }
-                
+
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
-        
+
         private PointDto TransformPoint(Point s, string userId, int total)
         {
             var point = new PointDto
@@ -264,8 +293,9 @@ namespace Consensus.Backend.Hive
                 Id = s.Id,
                 Label = s.Label
             };
-            
-            (int userResponse, float commonResponse, float penetration) = CalculateResponses(s.Responses, userId, total);
+
+            (int userResponse, float commonResponse, float penetration) =
+                CalculateResponses(s.Responses, userId, total);
             point.UserResponse = userResponse;
             point.CommonResponse = commonResponse;
             point.Penetration = penetration;
@@ -280,15 +310,16 @@ namespace Consensus.Backend.Hive
                 From = e.From,
                 To = e.To
             };
-            
-            (int userResponse, float commonResponse, float penetration) = CalculateResponses(e.Responses, userId, total);
+
+            (int userResponse, float commonResponse, float penetration) =
+                CalculateResponses(e.Responses, userId, total);
             synapse.UserResponse = userResponse;
             synapse.CommonResponse = commonResponse;
             synapse.Penetration = penetration;
 
             return synapse;
         }
-        
+
         private (int, float, float) CalculateResponses(Response[] responses, string userId, int totalParticipation)
         {
             int userResponse = 0; // -1 <<< 0 >>> +1
@@ -299,7 +330,7 @@ namespace Consensus.Backend.Hive
             {
                 return (userResponse, commonResponse, penetration);
             }
-            
+
             var userResponseRecord = responses.FirstOrDefault(r => r.UserId == userId);
             if (userResponseRecord != null)
             {
@@ -308,9 +339,9 @@ namespace Consensus.Backend.Hive
 
             int positiveResponses = responses.Count(r => r.Agrees);
             int negativeResponses = responses.Length - positiveResponses;
-            commonResponse = (positiveResponses - negativeResponses) / (float)responses.Length;
+            commonResponse = (positiveResponses - negativeResponses) / (float) responses.Length;
 
-            penetration = responses.Length / (float)totalParticipation;
+            penetration = responses.Length / (float) totalParticipation;
 
             return (userResponse, commonResponse, penetration);
         }
