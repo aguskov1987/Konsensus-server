@@ -283,6 +283,8 @@ namespace Consensus.Backend.Hive
                 });
             }
 
+            hive.TotalPoints++;
+
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
 

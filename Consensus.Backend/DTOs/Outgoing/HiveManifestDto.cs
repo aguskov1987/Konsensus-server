@@ -12,6 +12,7 @@ namespace Consensus.Backend.DTOs.Outgoing
         public int[] ParticipationCount { get; set; }
         public int[] PointCount { get; set; }
         public int TotalParticipation { get; set; }
+        public int TotalPoints { get; set; }
         public bool AllowDanglingPoints { get; set; }
     }
 }

@@ -12,6 +12,8 @@ using Consensus.Backend.Data;
 using Consensus.Backend.DTOs.Outgoing;
 using Consensus.Backend.Hive;
 using Consensus.Backend.Models;
+using Consensus.Backend.Saved;
+using Microsoft.Extensions.Configuration;
 
 namespace Consensus.Backend.Yard
 {
@@ -19,16 +21,20 @@ namespace Consensus.Backend.Yard
     {
         private readonly ArangoDBClient _client;
         private readonly IHiveService _hive;
+        private readonly ISavedHivesService _savedHives;
+        private readonly int _historyDays;
 
-        public YardService(IArangoDb db, IHiveService hive)
+        public YardService(IArangoDb db, IHiveService hive, ISavedHivesService savedHives, IConfiguration config)
         {
             _client = db.GetClient();
             _hive = hive;
+            _savedHives = savedHives;
+            _historyDays = Convert.ToInt32(config["TimeToStoreHiveHistory"]);
         }
 
         #region IYardService Members
 
-        public async Task<HiveManifest> CreateHive(string title, string description, string userId)
+        public async Task<HiveManifest> CreateHive(string title, string description, string userId, string seed)
         {
             // 1. generate ID
             string identifier = Guid.NewGuid().ToString();
@@ -74,7 +80,8 @@ namespace Consensus.Backend.Yard
                         Title = title,
                         Description = description,
                         CollectionId = identifier,
-                        DateCreated = DateTime.Now
+                        DateCreated = DateTime.Now,
+                        AllowDanglingPoints = string.IsNullOrEmpty(seed)
                     },
                     new PostDocumentsQuery
                     {
@@ -89,8 +96,15 @@ namespace Consensus.Backend.Yard
                     CollectionName = collectionName,
                     FieldsToIndex = new[] {"Label"}
                 });
+
+                // 5. if seed point is supplied, populate it
+                if (!string.IsNullOrEmpty(seed))
+                {
+                    await _hive.CreateNewPoint(userId, seed, null,
+                        hiveManifest.New.Id, hiveManifest.New.CollectionId, null, null);
+                }
                 
-                await AddHiveToUserSavedHives(hiveManifest.New.Id, userId, SavedHiveOwnershipType.UserCreatedHive);
+                await _savedHives.AddHiveToUserSavedHives(hiveManifest.New.Id, userId, SavedHiveOwnershipType.UserCreatedHive);
                 await SetHiveAsUsersDefaultHive(hiveManifest.New.Id, userId);
                 await _hive.MarkUserAsParticipant(hiveManifest.New.Id, userId);
 
@@ -107,25 +121,38 @@ namespace Consensus.Backend.Yard
         {
             string key = hiveId.Split("/")[1];
             var manifest = await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
+
+            // Every hive manifest has a list of history records which show how many points and how many actions
+            // (participants) were created/performed each day. Going back infinitely does not make sense so
+            // there is a limiter (_historyDays) - go back this many days from today (hence -> Reverse());
+            // if there is more, clip the data and re-save the manifest record.
+            bool save = false;
+            if (manifest.DailyPointCount.Count > _historyDays)
+            {
+                manifest.DailyPointCount = manifest.DailyPointCount
+                    .OrderBy(c => c.Date)
+                    .Reverse()
+                    .Take(_historyDays)
+                    .ToList();
+                save = true;
+            }
+
+            if (manifest.DailyParticipation.Count > _historyDays)
+            {
+                manifest.DailyParticipation = manifest.DailyParticipation
+                    .OrderBy(c => c.Date)
+                    .Reverse()
+                    .Take(_historyDays)
+                    .ToList();
+                save = true;
+            }
+
+            if (save)
+            {
+                await _client.Document.PutDocumentAsync(manifest.Id, manifest);
+            }
             
             return TransformManifest(manifest);
-        }
-
-        public async Task<HiveManifest[]> FindHivesByTitle(string searchPhrase)
-        {
-            string query = @"
-            FOR doc IN HiveManifests_View
-                SEARCH ANALYZER(doc.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
-                SORT BM25(doc) DESC
-            RETURN doc";
-
-            var parameters = new Dictionary<string, object>
-            {
-                ["phrase"] = searchPhrase
-            };
-
-            var result = await _client.Cursor.PostCursorAsync<HiveManifest>(query, parameters);
-            return result.Result.ToArray();
         }
 
         public async Task<bool> SetHiveAsUsersDefaultHive(string hiveId, string userId)
@@ -143,71 +170,13 @@ namespace Consensus.Backend.Yard
             throw new FileNotFoundException();
         }
 
-        public async Task<bool> AddHiveToUserSavedHives(string hiveId, string userId, SavedHiveOwnershipType ownership)
+        public async Task<HivesPagedSet> LoadYard(string query, int page, int perPage, HiveSortingOption sort, HiveOrder order)
         {
-            await _client.Document.PostDocumentAsync(
-                Connections.UserHasSavedHive.ToString(), new UsersSavedHive
-                {
-                    From = userId,
-                    To = hiveId,
-                    OwnershipOwnershipType = ownership
-                });
-
-            return true;
-        }
-
-        public async Task<bool> RemoveHiveFromUserSavedHives(string hiveId, string userId)
-        {
-            string query = "FOR link IN @@collection FILTER _from == @userId AND _to == @hiveId";
-            var parameters = new Dictionary<string, object>
-            {
-                ["@collection"] = Connections.UserHasSavedHive.ToString(),
-                ["userId"] = userId,
-                ["hiveId"] = hiveId
-            };
-            CursorResponse<UsersSavedHive> result = await _client.Cursor.PostCursorAsync<UsersSavedHive>(query, parameters);
-            UsersSavedHive item = result.Result.FirstOrDefault();
-
-            if (item != null)
-            {
-                string key = item.Id.Split("/")[1];
-                await _client.Document.DeleteDocumentAsync<UsersSavedHive>(Connections.UserHasSavedHive.ToString(),
-                    key);
-                return true;
-            }
-
-            throw new FileNotFoundException();
-        }
-
-        public async Task<HiveManifest[]> GetSavedHives(string userId)
-        {
-            string query = @"
-            LET hiveIds = (FOR c IN @@userHasSavedHives
-                               FILTER c._from == @userId
-                               RETURN c._to)
-
-            FOR hive IN @@manifests
-                FILTER hive._id IN hiveIds
-                RETURN hive";
-            
-            var parameters = new Dictionary<string, object>
-            {
-                ["@userHasSavedHives"] = Connections.UserHasSavedHive.ToString(),
-                ["@manifests"] = Collections.HiveManifests.ToString(),
-                ["userId"] = userId
-            };
-            
-            CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(query, parameters);
-            return result.Result.ToArray();
-        }
-
-        public async Task<HiveManifest[]> LoadMostActiveHives()
-        {
-            string query = @"
+            string aql = @"
             LET calculated = (
                 FOR manifest IN HiveManifests
-                FILTER manifest.Participation != null AND length(manifest.Participation) > 1
-                LET sorted = (FOR p IN manifest.Participation SORT p.Date DESC RETURN p)
+                FILTER manifest.DailyParticipation != null AND length(manifest.DailyParticipation) > 1
+                LET sorted = (FOR p IN manifest.DailyParticipation SORT p.Date DESC RETURN p)
                 LET today = sorted[0]
                 LET yesterday = sorted[1]
                 LET dynamic = today.NumberOfParticipants/yesterday.NumberOfParticipants
@@ -221,14 +190,47 @@ namespace Consensus.Backend.Yard
             
             // TODO: cache the result for future use
             
-            CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(query);
-            return result.Result.ToArray();
+            CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(aql);
+            return new HivesPagedSet {Hives = result.Result.Select(TransformManifest).ToArray()};
         }
 
         #endregion
 
+        private async Task<HiveManifest[]> FindHivesByTitle(string searchPhrase)
+        {
+            string query = @"
+            FOR doc IN HiveManifests_View
+                SEARCH ANALYZER(doc.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
+                SORT BM25(doc) DESC
+            RETURN doc";
+
+            var parameters = new Dictionary<string, object>
+            {
+                ["phrase"] = searchPhrase
+            };
+
+            var result = await _client.Cursor.PostCursorAsync<HiveManifest>(query, parameters);
+            return result.Result.ToArray();
+        }
+
         private HiveManifestDto TransformManifest(HiveManifest manifest)
         {
+            // Normalize the history to make sure missing days are accounted for
+            int[] pointsCount = new int[_historyDays];
+            int[] partCount = new int[_historyDays];
+            DateTime day = DateTime.Now.Date;
+            
+            for (int i = 0; i < _historyDays; i++)
+            {
+                var existingPoints = manifest.DailyPointCount.FirstOrDefault(c => c.Date == day);
+                pointsCount[i] = existingPoints?.Count ?? 0;
+                
+                var existingParticipation = manifest.DailyParticipation.FirstOrDefault(c => c.Date == day);
+                partCount[i] = existingParticipation?.NumberOfParticipants ?? 0;
+
+                day = day.Subtract(TimeSpan.FromDays(1));
+            }
+            
             return new HiveManifestDto
             {
                 Id = manifest.Id,
@@ -236,9 +238,10 @@ namespace Consensus.Backend.Yard
                 Title = manifest.Title,
                 CollectionId = manifest.CollectionId,
                 DateCreated = manifest.DateCreated,
-                PointCount = manifest.DailyPointCount.Select(c => c.Count).ToArray(),
-                ParticipationCount = manifest.DailyParticipation.Select(c => c.NumberOfParticipants).ToArray(),
+                PointCount = pointsCount.Reverse().ToArray(),
+                ParticipationCount = partCount.Reverse().ToArray(),
                 TotalParticipation = manifest.TotalParticipation,
+                TotalPoints = manifest.TotalPoints,
                 AllowDanglingPoints = manifest.AllowDanglingPoints
             };
         }

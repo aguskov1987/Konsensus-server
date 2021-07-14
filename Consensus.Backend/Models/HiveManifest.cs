@@ -41,6 +41,7 @@ namespace Consensus.Backend.Models
         public List<ParticipationCount> DailyParticipation { get; set; }
         public List<PointCount> DailyPointCount { get; set; }
         public int TotalParticipation { get; set; }
+        public int TotalPoints { get; set; }
         public bool AllowDanglingPoints { get; set; }
     }
 }

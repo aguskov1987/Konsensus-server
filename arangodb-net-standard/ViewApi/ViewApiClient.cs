@@ -31,8 +31,9 @@ namespace ArangoDBNetStandard.ViewApi
             string[] propsToIndex = body.FieldsToIndex
                 .Select(f => $"\"{f}\": {{\"analyzers\": [\"text_en\"]}}")
                 .ToArray();
-            
-            string links = $"\"links\": {{\"{body.CollectionName}\": {{\"analyzers\": [\"identity\"], \"fields\": {{{string.Join(", ", propsToIndex)}}}}}}}";
+
+            string links =
+                $"\"links\": {{\"{body.CollectionName}\": {{\"analyzers\": [\"identity\"], \"fields\": {{{string.Join(", ", propsToIndex)}}}}}}}";
             string payload = $"{{{name}, {type}, {links}}}";
             
             byte[] bytes = Encoding.ASCII.GetBytes(payload);

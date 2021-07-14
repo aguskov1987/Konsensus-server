@@ -6,20 +6,12 @@ namespace Consensus.Backend.Yard
 {
     public interface IYardService
     {
-        Task<HiveManifest> CreateHive(string title, string description, string userId);
+        Task<HiveManifest> CreateHive(string title, string description, string userId, string seed);
         
         Task<HiveManifestDto> GetHiveById(string hiveId);
         
-        Task<HiveManifest[]> FindHivesByTitle(string searchPhrase);
-        
         Task<bool> SetHiveAsUsersDefaultHive(string hiveId, string userId);
-        
-        Task<bool> AddHiveToUserSavedHives(string hiveId, string userId, SavedHiveOwnershipType ownership);
-        
-        Task<bool> RemoveHiveFromUserSavedHives(string hiveId, string userId);
-        
-        Task<HiveManifest[]> GetSavedHives(string userId);
-        
-        Task<HiveManifest[]> LoadMostActiveHives();
+
+        Task<HivesPagedSet> LoadYard(string query, int page, int perPage, HiveSortingOption sort, HiveOrder order);
     }
 }

@@ -18,6 +18,14 @@ namespace Consensus.API.Controllers
         {
             _yard = yard;
         }
+        
+        [HttpGet, Route(""), AuthorizeEntry]
+        public async Task<IActionResult> LoadYard([FromQuery] YardRequestParams parameters)
+        {
+            HivesPagedSet hives = await _yard.LoadYard(parameters.Query, parameters.Page, parameters.HivesPerPage,
+                parameters.Sort, parameters.Order);
+            return Ok(hives);
+        }
 
         [HttpPost, Route("hive"), AuthorizeEntry]
         public async Task<IActionResult> CreateNewHiveAsync([FromBody] NewHiveModel model)
@@ -26,7 +34,7 @@ namespace Consensus.API.Controllers
 
             try
             {
-                HiveManifest manifest = await _yard.CreateHive(model.Title, model.Description, user.Id);
+                HiveManifest manifest = await _yard.CreateHive(model.Title, model.Description, user.Id, model.SeedLabel);
                 return Ok(manifest);
             }
             catch (Exception e)
@@ -48,28 +56,6 @@ namespace Consensus.API.Controllers
             }
 
             return StatusCode(500);
-        }
-
-        [HttpGet, Route("saved"), AuthorizeEntry]
-        public async Task<IActionResult> LoadSavedHivesAsync()
-        {
-            User user = (User) HttpContext.Items["User"];
-            HiveManifest[] savedHives = await _yard.GetSavedHives(user.Id);
-            return Ok(savedHives);
-        }
-
-        [HttpGet, Route("start"), AuthorizeEntry]
-        public async Task<IActionResult> LoadMostActiveHivesAsync()
-        {
-            HiveManifest[] hives = await _yard.LoadMostActiveHives();
-            return Ok(hives);
-        }
-
-        [HttpPost, Route("search"), AuthorizeEntry]
-        public async Task<IActionResult> SearchYardAsync([FromBody] SearchYardModel model)
-        {
-            HiveManifest[] hives = await _yard.FindHivesByTitle(model.Phrase);
-            return Ok(hives);
         }
     }
 }
