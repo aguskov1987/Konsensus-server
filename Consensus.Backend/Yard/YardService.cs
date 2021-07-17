@@ -172,46 +172,80 @@ namespace Consensus.Backend.Yard
 
         public async Task<HivesPagedSet> LoadYard(string query, int page, int perPage, HiveSortingOption sort, HiveOrder order)
         {
-            string aql = @"
-            LET calculated = (
-                FOR manifest IN HiveManifests
-                FILTER manifest.DailyParticipation != null AND length(manifest.DailyParticipation) > 1
-                LET sorted = (FOR p IN manifest.DailyParticipation SORT p.Date DESC RETURN p)
-                LET today = sorted[0]
-                LET yesterday = sorted[1]
-                LET dynamic = today.NumberOfParticipants/yesterday.NumberOfParticipants
-                RETURN {manifest, dynamic}
-            )
-    
-            FOR c in calculated
-                SORT c.dynamic DESC
-                LIMIT 20
-                RETURN c.manifest";
+            var parameters = new Dictionary<string, object>
+            {
+                ["perPage"] = perPage,
+                ["page"] = page
+            };
             
-            // TODO: cache the result for future use
+            string aql;
+            string orderText = order == HiveOrder.Ascending ? "ASC" : "DESC";
+            if (string.IsNullOrEmpty(query))
+            {
+                string sortText;
+                switch (sort)
+                {
+                    case HiveSortingOption.ByActivity:
+                        sortText = "TotalParticipation";
+                        break;
+                    case HiveSortingOption.ByPointCount:
+                        sortText = "TotalPoints";
+                        break;
+                    case HiveSortingOption.ByDate:
+                        sortText = "DateCreated";
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(sort), sort, null);
+                }
+                aql = $@"
+                LET total = 
+                    (FOR h in HiveManifests
+                    COLLECT WITH COUNT INTO l
+                    RETURN l)
+
+                FOR hive IN HiveManifests
+                    SORT hive.{sortText} {orderText}
+                    LIMIT (@perPage * (@page - 1)), @perPage
+                    RETURN MERGE(hive, {{Total: total[0]}})";
+            }
+            else
+            {
+                aql = $@"
+                LET total = 
+                    (FOR h in HiveManifests
+                    SEARCH ANALYZER(h.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
+                    COLLECT WITH COUNT INTO l
+                    RETURN l)
+
+                FOR hive IN HiveManifests_View
+                    SEARCH ANALYZER(hive.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
+                    SORT BM25(doc) {orderText}
+                    LIMIT (@perPage * (@page - 1)), @perPage
+                    RETURN MERGE(hive, {{Total: total[0]}})";
+                
+                parameters.Add("phrase", query);
+            }
+
+            CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(aql, parameters);
+            int total;
+            int remainder = result.Result.First().Total % perPage;
+            if (remainder == 0)
+            {
+                total = result.Result.First().Total / perPage;
+            }
+            else
+            {
+                total = result.Result.First().Total / perPage + 1;
+            }
             
-            CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(aql);
-            return new HivesPagedSet {Hives = result.Result.Select(TransformManifest).ToArray()};
+            return new HivesPagedSet
+            {
+                Hives = result.Result.Select(TransformManifest).ToArray(),
+                TotalPages = total
+            };
         }
 
         #endregion
-
-        private async Task<HiveManifest[]> FindHivesByTitle(string searchPhrase)
-        {
-            string query = @"
-            FOR doc IN HiveManifests_View
-                SEARCH ANALYZER(doc.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
-                SORT BM25(doc) DESC
-            RETURN doc";
-
-            var parameters = new Dictionary<string, object>
-            {
-                ["phrase"] = searchPhrase
-            };
-
-            var result = await _client.Cursor.PostCursorAsync<HiveManifest>(query, parameters);
-            return result.Result.ToArray();
-        }
 
         private HiveManifestDto TransformManifest(HiveManifest manifest)
         {

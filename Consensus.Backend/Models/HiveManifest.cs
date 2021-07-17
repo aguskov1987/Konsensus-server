@@ -43,5 +43,7 @@ namespace Consensus.Backend.Models
         public int TotalParticipation { get; set; }
         public int TotalPoints { get; set; }
         public bool AllowDanglingPoints { get; set; }
+        
+        public int Total { get; set; }
     }
 }
