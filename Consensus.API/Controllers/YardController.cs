@@ -34,7 +34,8 @@ namespace Consensus.API.Controllers
 
             try
             {
-                HiveManifest manifest = await _yard.CreateHive(model.Title, model.Description, user.Id, model.SeedLabel);
+                HiveManifest manifest = await _yard.CreateHive(model.Title, model.Description,
+                    user.Id, model.SeedLabel, model.SeedType);
                 return Ok(manifest);
             }
             catch (Exception e)

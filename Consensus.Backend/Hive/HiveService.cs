@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ArangoDBNetStandard;
@@ -8,31 +9,31 @@ using ArangoDBNetStandard.DocumentApi.Models;
 using Consensus.Backend.Data;
 using Consensus.Backend.DTOs.Outgoing;
 using Consensus.Backend.Models;
+using Consensus.Backend.User;
 
 namespace Consensus.Backend.Hive
 {
     public class HiveService : IHiveService
     {
         private readonly ArangoDBClient _client;
+        private readonly IUserService _user;
 
-        public HiveService(IArangoDb db)
+        public HiveService(IArangoDb db, IUserService user)
         {
             _client = db.GetClient();
+            _user = user;
         }
 
+        #region IHiveService Members
+
         public async Task<(PointDto, SynapseDto)> CreateNewPoint(string userId, string point, string[] supportingLinks,
-            string hiveId, string identifier, string fromId, string toId)
+            string hiveId, string identifier, string fromId, string toId, PointType type)
         {
             string key = hiveId.Split("/")[1];
             HiveManifest manifest =
                 await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
 
             if (!manifest.AllowDanglingPoints && string.IsNullOrEmpty(fromId) && string.IsNullOrEmpty(toId))
-            {
-                throw new InvalidOperationException();
-            }
-
-            if (!string.IsNullOrEmpty(fromId) && !string.IsNullOrEmpty(toId))
             {
                 throw new InvalidOperationException();
             }
@@ -52,16 +53,20 @@ namespace Consensus.Backend.Hive
                         Label = point,
                         Links = supportingLinks,
                         DateCreated = DateTime.Now,
-                        Responses = new Response[] { }
+                        Responses = new Response[] { },
+                        Type = type
                     },
                     new PostDocumentsQuery {ReturnNew = true});
 
             await MarkUserAsParticipant(hiveId, userId);
+            string lastItemStamp = await AddLastItemInfoToUser(hiveId, pointResponse._id, userId);
             await BumpHivePointCount(hiveId);
 
             if (string.IsNullOrEmpty(fromId) && string.IsNullOrEmpty(toId))
             {
-                return (TransformPoint(pointResponse.New, userId, manifest.TotalParticipation), null);
+                PointDto pointDto = TransformPoint(pointResponse.New, userId, manifest.TotalParticipation);
+                pointDto.LastItemStamp = lastItemStamp;
+                return (pointDto, null);
             }
 
             string synCollectionId = IdPrefix._synapseCollection + identifier;
@@ -77,8 +82,14 @@ namespace Consensus.Backend.Hive
                     },
                     new PostDocumentsQuery {ReturnNew = true});
 
-            return (TransformPoint(pointResponse.New, userId, manifest.TotalParticipation),
-                TransformSynapse(synResponse.New, userId, manifest.TotalParticipation));
+            lastItemStamp = await AddLastItemInfoToUser(hiveId, synResponse._id, userId, true);
+
+            PointDto connectedPointDto = TransformPoint(pointResponse.New, userId, manifest.TotalParticipation);
+            connectedPointDto.LastItemStamp = lastItemStamp;
+            SynapseDto synapseDto = TransformSynapse(synResponse.New, userId, manifest.TotalParticipation);
+            synapseDto.LastItemStamp = lastItemStamp;
+            
+            return (connectedPointDto, synapseDto);
         }
 
         public async Task<SynapseDto> CreateNewSynapse(string fromId, string toId, string hiveId, string userId)
@@ -116,18 +127,22 @@ namespace Consensus.Backend.Hive
                     });
 
             await MarkUserAsParticipant(hiveId, userId);
+            string lastItemStamp = await AddLastItemInfoToUser(hiveId, response._id, userId);
 
             string key = hiveId.Split("/")[1];
             var manifest =
                 await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(), key);
 
-            return TransformSynapse(response.New, userId, manifest.TotalParticipation);
+            SynapseDto synapse = TransformSynapse(response.New, userId, manifest.TotalParticipation);
+            synapse.LastItemStamp = lastItemStamp;
+            return synapse;
         }
 
         public async Task<object> Respond(string itemId, string hiveId, bool agree, string userId)
         {
             var collectionId = itemId.Split('/')[0];
             var key = itemId.Split('/')[1];
+            // TODO: what is 't'?
             bool isPoint = collectionId[1] == 't';
 
             object item;
@@ -159,9 +174,70 @@ namespace Consensus.Backend.Hive
             return item;
         }
 
-        public async Task<PointDto[]> FindPoints(string phrase, string identifier, string userId, string hiveId)
+        public async Task<DeletionResult> TryDeleteItem(string stamp, string userId)
         {
-            string query = @"
+            var user = await _user.GetByIdAsync(userId);
+            if (string.IsNullOrEmpty(user.LastCreatedItem) || user.LastCreatedItem != stamp)
+            {
+                return DeletionResult.Missing;
+            }
+
+            (string hiveId, string pointId, string synapseId) = ExtractItemsForDeletion(stamp);
+
+            // trying to delete a point
+            if (pointId != null && synapseId == null)
+            {
+                DeletionResult checkPoint = await CheckIfCanDeletePoint(pointId);
+                if (checkPoint == DeletionResult.Success)
+                {
+                    await DeletePoint(hiveId, pointId);
+                    return DeletionResult.Success;
+                }
+
+                return checkPoint;
+            }
+
+            // trying to delete a synapse
+            if (pointId == null && synapseId != null)
+            {
+                DeletionResult checkSynapse = await CheckIfCanDeletePoint(synapseId);
+                if (checkSynapse == DeletionResult.Success)
+                {
+                    await DeleteSynapse(hiveId, synapseId);
+                    return DeletionResult.Success;
+                }
+
+                return checkSynapse;
+            }
+            
+            // trying to delete both point and synapse
+            DeletionResult checkPoint2 = await CheckIfCanDeletePoint(pointId);
+            DeletionResult checkSynapse2 = await CheckIfCanDeletePoint(synapseId);
+            if (checkPoint2 == DeletionResult.Success && checkSynapse2 == DeletionResult.Success)
+            {
+                await DeletePoint(hiveId, pointId);
+                await DeleteSynapse(hiveId, synapseId);
+                return DeletionResult.Success;
+            }
+
+            return checkPoint2 != DeletionResult.Success ? checkPoint2 : checkSynapse2;
+        }
+
+        public Task<PointDto[]> FindPointsFromQuantQuery(string query, string identifier, string userId, string currentHiveId)
+        {
+            List<QuantSearchClause> clauses = null;
+            bool parsed = ParseQuantQuery(query, out clauses);
+            if (!parsed)
+            {
+                throw new FormatException();
+            }
+            
+            throw new NotImplementedException();
+        }
+
+        public async Task<PointDto[]> FindPoints(string query, string identifier, string userId, string hiveId)
+        {
+            string aql = @"
             FOR point IN @@view
                 SEARCH ANALYZER(point.Label IN TOKENS(@phrase, 'text_en'), 'text_en')
                 SORT BM25(point) DESC
@@ -170,10 +246,10 @@ namespace Consensus.Backend.Hive
             var parameters = new Dictionary<string, object>
             {
                 ["@view"] = IdPrefix._viewCollection + identifier,
-                ["phrase"] = phrase
+                ["phrase"] = query
             };
 
-            CursorResponse<Point> result = await _client.Cursor.PostCursorAsync<Point>(query, parameters);
+            CursorResponse<Point> result = await _client.Cursor.PostCursorAsync<Point>(aql, parameters);
 
             string manifestKey = hiveId.Split("/")[1];
             var manifest = await _client.Document
@@ -288,6 +364,176 @@ namespace Consensus.Backend.Hive
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
 
+        #endregion
+
+        private async Task<DeletionResult> CheckIfCanDeletePoint(string pointId)
+        {
+            var collectionId = pointId.Split('/')[0];
+            var key = pointId.Split('/')[1];
+            Point point = await _client.Document
+                .GetDocumentAsync<Point>(collectionId, key);
+            if (point.Responses.Length > 1)
+            {
+                return DeletionResult.RespondedTo;
+            }
+
+            string graph = collectionId.Replace(IdPrefix._pointCollection, IdPrefix._graph);
+            string queryForSynapses = @"
+            FOR v, e IN 0..1 ANY @point
+                GRAPH @graph
+                OPTIONS {uniqueVertices: 'path', }
+                RETURN e";
+            var parameters = new Dictionary<string, object>
+            {
+                ["point"] = pointId,
+                ["graph"] = graph
+            };
+
+            CursorResponse<Subgraph> result =
+                await _client.Cursor.PostCursorAsync<Subgraph>(queryForSynapses, parameters, count: true);
+            
+            if (result.Count > 0)
+            {
+                return DeletionResult.ConnectedTo;
+            }
+
+            return DeletionResult.Success;
+        }
+
+        private async Task<DeletionResult> CheckIfCanDeleteSynapse(string hiveId, string synapseId)
+        {
+            var collectionId = synapseId.Split('/')[0];
+            var key = synapseId.Split('/')[1];
+            Synapse synapse = await _client.Document
+                .GetDocumentAsync<Synapse>(collectionId, key);
+            if (synapse.Responses.Length > 1)
+            {
+                return DeletionResult.RespondedTo;
+            }
+
+            return DeletionResult.Success;
+        }
+
+        private (string ,string, string) ExtractItemsForDeletion(string stamp)
+        {
+            string[] parts = stamp.Split('+');
+            
+            if (parts.Length == 1)
+            {
+                // point/synapse only
+                string[] ids = parts[0].Split(':');
+                if (ids[1].Substring(0, 3) == IdPrefix._pointCollection)
+                {
+                    return (ids[0], ids[1], null);
+                }
+                if (ids[1].Substring(0, 3) == IdPrefix._synapseCollection)
+                {
+                    return (ids[0], null, ids[1]);
+                }
+
+                throw new InvalidOperationException();
+            }
+
+            if (parts.Length == 2)
+            {
+                string[] pointsIds = parts[0].Split(':');
+                var hiveId = pointsIds[0];
+                var pointId = pointsIds[1];
+
+                string[] synapseIds = parts[1].Split(':');
+                var synapseId = synapseIds[1];
+
+                return (hiveId, pointId, synapseId);
+            }
+            
+            throw new InvalidOperationException();
+        }
+
+        private async Task<string> AddLastItemInfoToUser(string hiveId, string itemId, string userId, bool addToExisting = false)
+        {
+            // stamp format: {hive ID}:{point ID} or {hive ID}:{point ID}+{hive ID}:{synapse ID}
+            
+            string userKey = userId.Split("/")[1];
+            var user = await _client.Document
+                .GetDocumentAsync<Models.User>(Collections.Users.ToString(), userKey);
+            
+            string info = $"{hiveId}:{itemId}";
+            user.LastCreatedItem = addToExisting ? user.LastCreatedItem + "+" + info : info;
+            await _client.Document.PutDocumentAsync(userId, user);
+            
+            return info;
+        }
+
+        private bool ParseQuantQuery(string query, out List<QuantSearchClause> clauses)
+        {
+            if (query[0] != '!' || query[1] != '!')
+            {
+                clauses = null;
+                return false;
+            }
+
+            try
+            {
+                clauses = new List<QuantSearchClause>();
+                query = query.Substring(2).ToLower();
+                string[] parts = query.Split(';');
+                
+                foreach (string part in parts)
+                {
+                    string[] tokens = part.Split(' ');
+                    if (tokens[0].Trim() == "most")
+                    {
+                        switch (tokens[1].Trim())
+                        {
+                            case "active":
+                                clauses.Add(QuantSearchClause.MostActive);
+                                break;
+                            case "connected":
+                                clauses.Add(QuantSearchClause.MostConnected);
+                                break;
+                            case "recently-responded":
+                                clauses.Add(QuantSearchClause.MostFresh);
+                                break;
+                            case "positive":
+                                clauses.Add(QuantSearchClause.MostPositive);
+                                break;
+                            case "old":
+                                clauses.Add(QuantSearchClause.MostOld);
+                                break;
+                        }
+                    } else if (tokens[0].Trim() == "least")
+                    {
+                        switch (tokens[1].Trim())
+                        {
+                            case "active":
+                                clauses.Add(QuantSearchClause.LeastActive);
+                                break;
+                            case "connected":
+                                clauses.Add(QuantSearchClause.LeastConnected);
+                                break;
+                            case "recently-responded":
+                                clauses.Add(QuantSearchClause.LeastFresh);
+                                break;
+                            case "positive":
+                                clauses.Add(QuantSearchClause.LeastPositive);
+                                break;
+                            case "old":
+                                clauses.Add(QuantSearchClause.LeastOld);
+                                break;
+                        }
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception exception)
+            {
+                clauses = null;
+                return false;
+            }
+            
+        }
+
         private PointDto TransformPoint(Point s, string userId, int total)
         {
             var point = new PointDto
@@ -301,6 +547,7 @@ namespace Consensus.Backend.Hive
             point.UserResponse = userResponse;
             point.CommonResponse = commonResponse;
             point.Penetration = penetration;
+            point.Type = s.Type;
             return point;
         }
 
@@ -394,6 +641,34 @@ namespace Consensus.Backend.Hive
             updated[updated.Length - 1] = newItem;
 
             return updated;
+        }
+
+        private async Task DeletePoint(string hiveId, string pointId)
+        {
+            string hiveKey = hiveId.Split('/')[0];
+            await _client.Document
+                .DeleteDocumentAsync<Point>(pointId.Split('/')[0], pointId.Split('/')[1]);
+                    
+            HiveManifest hive = await _client.Document
+                .GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(),
+                    hiveKey);
+                    
+            hive.TotalParticipation--;
+            hive.TotalPoints--;
+            await _client.Document.PutDocumentAsync(hiveId, hive);
+        }
+
+        private async Task DeleteSynapse(string hiveId, string synapseId)
+        {
+            string hiveKey = hiveId.Split('/')[0];
+            await _client.Document.
+                DeleteDocumentAsync<Point>(synapseId.Split('/')[0], synapseId.Split('/')[1]);
+            
+            HiveManifest hive = await _client.Document.GetDocumentAsync<HiveManifest>(Collections.HiveManifests.ToString(),
+                hiveKey);
+            
+            hive.TotalParticipation--;
+            await _client.Document.PutDocumentAsync(hiveId, hive);
         }
     }
 }

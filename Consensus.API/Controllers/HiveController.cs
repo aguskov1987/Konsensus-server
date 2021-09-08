@@ -22,7 +22,15 @@ namespace Consensus.API.Controllers
         public async Task<IActionResult> FindPoints([FromBody] PointSearchModel model)
         {
             User user = (User)HttpContext.Items["User"];
-            PointDto[] points = await _hive.FindPoints(model.Phrase, model.Identifier, user.Id, user.CurrentHiveId);
+            PointDto[] points = await _hive.FindPoints(model.Query, model.Identifier, user.Id, user.CurrentHiveId);
+            return Ok(points);
+        }
+
+        [HttpPost, Route("quant-search"), AuthorizeEntry]
+        public async Task<IActionResult> FindPointsFromQuantQuery([FromBody] PointSearchModel model)
+        {
+            User user = (User)HttpContext.Items["User"];
+            PointDto[] points = await _hive.FindPointsFromQuantQuery(model.Query, model.Identifier, user.Id, user.CurrentHiveId);
             return Ok(points);
         }
 
@@ -32,7 +40,7 @@ namespace Consensus.API.Controllers
             User user = (User)HttpContext.Items["User"];
             
             (PointDto, SynapseDto) result = await _hive.CreateNewPoint(user.Id, model.Point, model.SupportingLinks,
-                model.HiveId, model.Identifier, model.FromId, model.ToId);
+                model.HiveId, model.Identifier, model.FromId, model.ToId, model.Type);
 
             if (result.Item2 == null)
             {
@@ -73,6 +81,14 @@ namespace Consensus.API.Controllers
             User user = (User)HttpContext.Items["User"];
             SubGraph graph = await _hive.LoadSubgraph(pointId, user.Id, user.CurrentHiveId);
             return Ok(graph);
+        }
+
+        [HttpDelete, Route("item"), AuthorizeEntry]
+        public async Task<IActionResult> TryDeletePoint([FromBody] DeleteItemModel model)
+        {
+            User user = (User)HttpContext.Items["User"];
+            DeletionResult result = await _hive.TryDeleteItem(model.Stamp, user.Id);
+            return Ok(new {status = result});
         }
     }
 }

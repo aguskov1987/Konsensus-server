@@ -9,5 +9,14 @@ namespace Consensus.Backend.Models
         public string Username { get; set; }
         public string Password { get; set; }
         public string CurrentHiveId { get; set; }
+        public string LastCreatedItem { get; set; }
+    }
+    
+    public enum DeletionResult
+    {
+        Success,
+        RespondedTo,
+        ConnectedTo,
+        Missing
     }
 }

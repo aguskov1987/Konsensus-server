@@ -1,4 +1,6 @@
-﻿namespace Consensus.API.Models.Incoming
+﻿using Consensus.Backend.Models;
+
+namespace Consensus.API.Models.Incoming
 {
     public class NewPointModel
     {
@@ -8,5 +10,6 @@
         public string[] SupportingLinks { get; set; }
         public string FromId { get; set; }
         public string ToId { get; set; }
+        public PointType Type { get; set; }
     }
 }

@@ -8,5 +8,6 @@
         public int UserResponse { get; set; }
         public float CommonResponse { get; set; }
         public float Penetration { get; set; }
+        public string LastItemStamp { get; set; }
     }
 }

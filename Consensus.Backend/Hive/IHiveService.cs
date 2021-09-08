@@ -1,16 +1,19 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Consensus.Backend.DTOs.Outgoing;
+using Consensus.Backend.Models;
 
 namespace Consensus.Backend.Hive
 {
     public interface IHiveService
     {
         Task<(PointDto, SynapseDto)> CreateNewPoint(string userId, string point, string[] supportingLinks,
-            string hiveId, string identifier, string fromId, string toId);
+            string hiveId, string identifier, string fromId, string toId, PointType type);
         
-        Task<PointDto[]> FindPoints(string phrase, string identifier, string userId, string hiveId);
+        Task<PointDto[]> FindPoints(string query, string identifier, string userId, string hiveId);
         
+        Task<PointDto[]> FindPointsFromQuantQuery(string query, string identifier, string userId, string currentHiveId);
+
         Task<SubGraph> LoadSubgraph(string pointId, string userId, string hiveId);
         
         /// <summary>
@@ -43,5 +46,6 @@ namespace Consensus.Backend.Hive
         Task<SynapseDto> CreateNewSynapse(string fromId, string toId, string hiveId, string userId);
         
         Task<object> Respond(string itemId, string hiveId, bool agree, string userId);
+        Task<DeletionResult> TryDeleteItem(string stamp, string userId);
     }
 }

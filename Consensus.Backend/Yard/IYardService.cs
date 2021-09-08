@@ -6,7 +6,7 @@ namespace Consensus.Backend.Yard
 {
     public interface IYardService
     {
-        Task<HiveManifest> CreateHive(string title, string description, string userId, string seed);
+        Task<HiveManifest> CreateHive(string title, string description, string userId, string seed, PointType seedType);
         
         Task<HiveManifestDto> GetHiveById(string hiveId);
         

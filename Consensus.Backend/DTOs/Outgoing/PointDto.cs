@@ -1,4 +1,6 @@
-﻿namespace Consensus.Backend.DTOs.Outgoing
+﻿using Consensus.Backend.Models;
+
+namespace Consensus.Backend.DTOs.Outgoing
 {
     public class PointDto
     {
@@ -20,5 +22,7 @@
         /// Number of responses divided by the number of total participants
         /// </summary>
         public float Penetration { get; set; }
+        public PointType Type { get; set; }
+        public string LastItemStamp { get; set; }
     }
 }

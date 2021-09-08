@@ -34,7 +34,7 @@ namespace Consensus.Backend.Yard
 
         #region IYardService Members
 
-        public async Task<HiveManifest> CreateHive(string title, string description, string userId, string seed)
+        public async Task<HiveManifest> CreateHive(string title, string description, string userId, string seed, PointType seedType)
         {
             // 1. generate ID
             string identifier = Guid.NewGuid().ToString();
@@ -101,7 +101,7 @@ namespace Consensus.Backend.Yard
                 if (!string.IsNullOrEmpty(seed))
                 {
                     await _hive.CreateNewPoint(userId, seed, null,
-                        hiveManifest.New.Id, hiveManifest.New.CollectionId, null, null);
+                        hiveManifest.New.Id, hiveManifest.New.CollectionId, null, null, seedType);
                 }
                 
                 await _savedHives.AddHiveToUserSavedHives(hiveManifest.New.Id, userId, SavedHiveOwnershipType.UserCreatedHive);
