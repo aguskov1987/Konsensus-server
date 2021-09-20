@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Consensus.API.Controllers
 {
-    public class DecodeQueryParamAttribute: ActionFilterAttribute
+    public class DecodeQueryParamAttribute : ActionFilterAttribute
     {
         public override void OnActionExecuting(ActionExecutingContext context)
         {
@@ -13,6 +13,7 @@ namespace Consensus.API.Controllers
                 string decoded = System.Web.HttpUtility.UrlDecode(context.ActionArguments[key] as string);
                 context.ActionArguments[key] = decoded;
             }
+
             base.OnActionExecuting(context);
         }
     }

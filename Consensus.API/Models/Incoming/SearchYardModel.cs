@@ -2,7 +2,6 @@
 
 namespace Consensus.API.Models.Incoming
 {
-
     public class YardRequestParams
     {
         public string Query { get; set; }

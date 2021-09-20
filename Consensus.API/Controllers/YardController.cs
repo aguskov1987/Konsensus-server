@@ -18,7 +18,7 @@ namespace Consensus.API.Controllers
         {
             _yard = yard;
         }
-        
+
         [HttpGet, Route(""), AuthorizeEntry]
         public async Task<IActionResult> LoadYard([FromQuery] YardRequestParams parameters)
         {
@@ -30,7 +30,7 @@ namespace Consensus.API.Controllers
         [HttpPost, Route("hive"), AuthorizeEntry]
         public async Task<IActionResult> CreateNewHiveAsync([FromBody] NewHiveModel model)
         {
-            User user = (User) HttpContext.Items["User"];
+            User user = (User)HttpContext.Items["User"];
 
             try
             {
@@ -48,7 +48,7 @@ namespace Consensus.API.Controllers
         [HttpGet, Route("hive"), AuthorizeEntry, DecodeQueryParam]
         public async Task<IActionResult> LoadHiveAsync([FromQuery] string hiveId)
         {
-            User user = (User) HttpContext.Items["User"];
+            User user = (User)HttpContext.Items["User"];
             HiveManifestDto hive = await _yard.GetHiveById(hiveId);
             if (hive != null)
             {

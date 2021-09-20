@@ -19,9 +19,13 @@ namespace Consensus.Backend.Data
             _client = new ArangoDBClient(transport);
         }
 
+        #region IArangoDb Members
+
         public ArangoDBClient GetClient()
         {
             return _client;
         }
+
+        #endregion
     }
 }

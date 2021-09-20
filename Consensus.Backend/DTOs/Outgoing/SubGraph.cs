@@ -5,6 +5,10 @@ namespace Consensus.Backend.DTOs.Outgoing
 {
     public class SubGraph
     {
+        public List<PointDto> Points { get; set; }
+        public List<SynapseDto> Synapses { get; set; }
+        public PointDto Origin { get; set; }
+
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context)
         {
@@ -18,9 +22,5 @@ namespace Consensus.Backend.DTOs.Outgoing
                 Synapses = new List<SynapseDto>();
             }
         }
-
-        public List<PointDto> Points { get; set; }
-        public List<SynapseDto> Synapses { get; set; }
-        public PointDto Origin { get; set; }
     }
 }

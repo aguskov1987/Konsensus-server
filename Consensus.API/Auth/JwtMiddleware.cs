@@ -24,7 +24,9 @@ namespace Consensus.API.Auth
             var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
 
             if (token != null)
+            {
                 await AttachUserToContext(context, userService, token);
+            }
 
             await _next(context);
         }
@@ -34,7 +36,8 @@ namespace Consensus.API.Auth
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.ASCII.GetBytes("The authenticate request model defines the parameters for incoming requests");
+                var key = Encoding.ASCII.GetBytes(
+                    "The authenticate request model defines the parameters for incoming requests");
                 tokenHandler.ValidateToken(token, new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
