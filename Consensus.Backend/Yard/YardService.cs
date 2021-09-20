@@ -186,7 +186,7 @@ namespace Consensus.Backend.Yard
                 switch (sort)
                 {
                     case HiveSortingOption.ByActivity:
-                        sortText = "TotalParticipation";
+                        sortText = "TimeOfLastParticipation";
                         break;
                     case HiveSortingOption.ByPointCount:
                         sortText = "TotalPoints";
