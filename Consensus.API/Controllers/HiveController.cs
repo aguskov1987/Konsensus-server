@@ -30,7 +30,8 @@ namespace Consensus.API.Controllers
         public async Task<IActionResult> FindPointsFromQuantQuery([FromBody] PointSearchModel model)
         {
             User user = (User)HttpContext.Items["User"];
-            PointDto[] points = await _hive.FindPointsFromQuantQuery(model.Query, model.Identifier, user.Id, user.CurrentHiveId);
+            PointDto[] points =
+                await _hive.FindPointsFromQuantQuery(model.Query, model.Identifier, user.Id, user.CurrentHiveId);
             return Ok(points);
         }
 
@@ -38,30 +39,33 @@ namespace Consensus.API.Controllers
         public async Task<IActionResult> PostNewPoint([FromBody] NewPointModel model)
         {
             User user = (User)HttpContext.Items["User"];
-            
+
             (PointDto, SynapseDto) result = await _hive.CreateNewPoint(user.Id, model.Point, model.SupportingLinks,
                 model.HiveId, model.Identifier, model.FromId, model.ToId, model.Type);
 
             if (result.Item2 == null)
             {
-                return Ok(new {points = new [] {result.Item1}, synapses = new SynapseDto[]{}, origin = result.Item1});
+                return Ok(new
+                    { points = new[] { result.Item1 }, synapses = new SynapseDto[] { }, origin = result.Item1 });
             }
-            return Ok(new {points = new [] {result.Item1}, synapses = new []{result.Item2}, origin = result.Item1});
+
+            return Ok(new
+                { points = new[] { result.Item1 }, synapses = new[] { result.Item2 }, origin = result.Item1 });
         }
-        
+
         [HttpPost, Route("synapse"), AuthorizeEntry]
         public async Task<IActionResult> ConnectWithSynapse([FromBody] NewSynapseModel model)
         {
             User user = (User)HttpContext.Items["User"];
             SynapseDto synapse = await _hive.CreateNewSynapse(model.FromId, model.ToId, model.HiveId, user.Id);
-            
+
             return Ok(new
             {
-                points = new PointDto []{},
-                synapses = synapse == null ? new SynapseDto []{} : new[]{synapse}
+                points = new PointDto[] { },
+                synapses = synapse == null ? new SynapseDto[] { } : new[] { synapse }
             });
         }
-        
+
         [HttpPost, Route("respond"), AuthorizeEntry]
         public async Task<IActionResult> Respond([FromBody] UserResponseModel model)
         {
@@ -70,9 +74,10 @@ namespace Consensus.API.Controllers
 
             if (item is PointDto dto)
             {
-                return Ok(new {points = new[] {dto}, synapses = new SynapseDto[]{}});
+                return Ok(new { points = new[] { dto }, synapses = new SynapseDto[] { } });
             }
-            return Ok(new {points = new PointDto []{}, synapses = new[]{item as SynapseDto}});
+
+            return Ok(new { points = new PointDto[] { }, synapses = new[] { item as SynapseDto } });
         }
 
         [HttpGet, Route("subgraph"), AuthorizeEntry, DecodeQueryParam]
@@ -88,7 +93,7 @@ namespace Consensus.API.Controllers
         {
             User user = (User)HttpContext.Items["User"];
             DeletionResult result = await _hive.TryDeleteItem(model.Stamp, user.Id);
-            return Ok(new {status = result});
+            return Ok(new { status = result });
         }
     }
 }
