@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ArangoDBNetStandard;
@@ -187,7 +186,7 @@ namespace Consensus.Backend.Hive
             // trying to delete a point
             if (pointId != null && synapseId == null)
             {
-                DeletionResult checkPoint = await CheckIfCanDeletePoint(pointId);
+                DeletionResult checkPoint = await CheckIfCanDeletePoint(pointId, false);
                 if (checkPoint == DeletionResult.Success)
                 {
                     await DeletePoint(hiveId, pointId);
@@ -200,7 +199,7 @@ namespace Consensus.Backend.Hive
             // trying to delete a synapse
             if (pointId == null && synapseId != null)
             {
-                DeletionResult checkSynapse = await CheckIfCanDeletePoint(synapseId);
+                DeletionResult checkSynapse = await CheckIfCanDeleteSynapse(synapseId);
                 if (checkSynapse == DeletionResult.Success)
                 {
                     await DeleteSynapse(hiveId, synapseId);
@@ -211,8 +210,8 @@ namespace Consensus.Backend.Hive
             }
             
             // trying to delete both point and synapse
-            DeletionResult checkPoint2 = await CheckIfCanDeletePoint(pointId);
-            DeletionResult checkSynapse2 = await CheckIfCanDeletePoint(synapseId);
+            DeletionResult checkPoint2 = await CheckIfCanDeletePoint(pointId, true);
+            DeletionResult checkSynapse2 = await CheckIfCanDeleteSynapse(synapseId);
             if (checkPoint2 == DeletionResult.Success && checkSynapse2 == DeletionResult.Success)
             {
                 await DeletePoint(hiveId, pointId);
@@ -297,14 +296,14 @@ namespace Consensus.Backend.Hive
             string query = @"FOR relation IN @@collection
                                 FILTER relation._from == @userId AND relation._to == @hiveId
                                 RETURN relation._to";
-            var parameters = new Dictionary<string, object>
+            Dictionary<string, object> parameters = new Dictionary<string, object>
             {
                 ["@collection"] = Connections.UserHasParticipated.ToString(),
                 ["userId"] = userId,
                 ["hiveId"] = hiveId
             };
             CursorResponse<string> existing = await _client.Cursor.PostCursorAsync<string>(query, parameters);
-            var existingParticipant = !string.IsNullOrEmpty(existing.Result.FirstOrDefault());
+            bool existingParticipant = !string.IsNullOrEmpty(existing.Result.FirstOrDefault());
 
             // if this is the first participation, add a record
             if (!existingParticipant)
@@ -334,6 +333,7 @@ namespace Consensus.Backend.Hive
             }
 
             hive.TotalParticipation++;
+            hive.TimeOfLastParticipation = DateTime.Now;
 
             await _client.Document.PutDocumentAsync(hiveId, hive);
         }
@@ -366,7 +366,7 @@ namespace Consensus.Backend.Hive
 
         #endregion
 
-        private async Task<DeletionResult> CheckIfCanDeletePoint(string pointId)
+        private async Task<DeletionResult> CheckIfCanDeletePoint(string pointId, bool connected)
         {
             var collectionId = pointId.Split('/')[0];
             var key = pointId.Split('/')[1];
@@ -391,22 +391,26 @@ namespace Consensus.Backend.Hive
 
             CursorResponse<Subgraph> result =
                 await _client.Cursor.PostCursorAsync<Subgraph>(queryForSynapses, parameters, count: true);
-            
-            if (result.Count > 0)
+
+            if (!connected && result.Count == 1 && result.Result.FirstOrDefault() == null)
             {
-                return DeletionResult.ConnectedTo;
+                return DeletionResult.Success;
             }
 
-            return DeletionResult.Success;
+            if (connected && result.Count == 2)
+            {
+                return DeletionResult.Success;
+            }
+            return DeletionResult.ConnectedTo;
         }
 
-        private async Task<DeletionResult> CheckIfCanDeleteSynapse(string hiveId, string synapseId)
+        private async Task<DeletionResult> CheckIfCanDeleteSynapse(string synapseId)
         {
             var collectionId = synapseId.Split('/')[0];
             var key = synapseId.Split('/')[1];
             Synapse synapse = await _client.Document
                 .GetDocumentAsync<Synapse>(collectionId, key);
-            if (synapse.Responses.Length > 1)
+            if (synapse.Responses != null && synapse.Responses.Length > 1)
             {
                 return DeletionResult.RespondedTo;
             }
@@ -461,7 +465,7 @@ namespace Consensus.Backend.Hive
             user.LastCreatedItem = addToExisting ? user.LastCreatedItem + "+" + info : info;
             await _client.Document.PutDocumentAsync(userId, user);
             
-            return info;
+            return user.LastCreatedItem;
         }
 
         private bool ParseQuantQuery(string query, out List<QuantSearchClause> clauses)
@@ -645,7 +649,7 @@ namespace Consensus.Backend.Hive
 
         private async Task DeletePoint(string hiveId, string pointId)
         {
-            string hiveKey = hiveId.Split('/')[0];
+            string hiveKey = hiveId.Split('/')[1];
             await _client.Document
                 .DeleteDocumentAsync<Point>(pointId.Split('/')[0], pointId.Split('/')[1]);
                     
@@ -660,7 +664,7 @@ namespace Consensus.Backend.Hive
 
         private async Task DeleteSynapse(string hiveId, string synapseId)
         {
-            string hiveKey = hiveId.Split('/')[0];
+            string hiveKey = hiveId.Split('/')[1];
             await _client.Document.
                 DeleteDocumentAsync<Point>(synapseId.Split('/')[0], synapseId.Split('/')[1]);
             

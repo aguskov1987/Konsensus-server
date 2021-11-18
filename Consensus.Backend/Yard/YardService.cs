@@ -212,14 +212,14 @@ namespace Consensus.Backend.Yard
             {
                 aql = $@"
                 LET total = 
-                    (FOR h in HiveManifests
+                    (FOR h in HiveManifests_View
                     SEARCH ANALYZER(h.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
                     COLLECT WITH COUNT INTO l
                     RETURN l)
 
                 FOR hive IN HiveManifests_View
                     SEARCH ANALYZER(hive.Title IN TOKENS(@phrase, 'text_en'), 'text_en')
-                    SORT BM25(doc) {orderText}
+                    SORT BM25(hive) {orderText}
                     LIMIT (@perPage * (@page - 1)), @perPage
                     RETURN MERGE(hive, {{Total: total[0]}})";
                 
@@ -227,6 +227,16 @@ namespace Consensus.Backend.Yard
             }
 
             CursorResponse<HiveManifest> result = await _client.Cursor.PostCursorAsync<HiveManifest>(aql, parameters);
+
+            if (!result.Result.Any())
+            {
+                return new HivesPagedSet
+                {
+                    Hives = new HiveManifestDto[] {},
+                    TotalPages = 0
+                };
+            }
+            
             int total;
             int remainder = result.Result.First().Total % perPage;
             if (remainder == 0)
